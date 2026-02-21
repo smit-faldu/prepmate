@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Pipecat WebRTC STT</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            color: #333;
+        }
+
+        #transcripts {
+            background: #f9f9f9;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            min-height: 200px;
+            margin-top: 20px;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 6px;
+            border: none;
+            background: #007bff;
+            color: white;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .user-text {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Real-time Speech-to-Text</h1>
+    <button id="startBtn">Start Microphone</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <div id="status">Status: Disconnected</div>
+
+    <div id="transcripts">
+        <em>Transcriptions will appear here...</em>
+    </div>
+
+    <script>
+        let pc = null;
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const transcriptsDiv = document.getElementById('transcripts');
+        const statusDiv = document.getElementById('status');
+
+        startBtn.onclick = async () => {
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            transcriptsDiv.innerHTML = '';
+            statusDiv.innerText = "Status: Connecting...";
+
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            });
+
+            pc.onconnectionstatechange = () => {
+                console.log("Connection State:", pc.connectionState);
+                statusDiv.innerText = `Status: ${pc.connectionState}`;
+            };
+
+            pc.oniceconnectionstatechange = () => {
+                console.log("ICE Connection State:", pc.iceConnectionState);
+                if (pc.iceConnectionState === "failed") {
+                    statusDiv.innerText = "Status: ICE Failed";
+                }
+            };
+
+            const dc = pc.createDataChannel("pipecat");
+            dc.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'transcription') {
+                        transcriptsDiv.innerHTML += `<div class="user-text">🗣️ <b>You:</b> ${data.text}</div>`;
+                    } else if (data.type === 'llm_response') {
+                        transcriptsDiv.innerHTML += `<div class="user-text" style="color:#d9534f;">🦈 <b>Shark:</b> ${data.text}</div>`;
+                    }
+                    transcriptsDiv.scrollTop = transcriptsDiv.scrollHeight;
+                } catch (err) {
+                    console.log("Received data: ", e.data);
+                }
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            const response = await fetch('/bot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sdp: pc.localDescription.sdp,
+                    type: pc.localDescription.type
+                })
+            });
+
+            const answer = await response.json();
+            await pc.setRemoteDescription(answer);
+        };
+
+        stopBtn.onclick = () => {
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            statusDiv.innerText = "Status: Disconnected";
+            transcriptsDiv.innerHTML += `<div><em>Connection closed.</em></div>`;
+        };
+    </script>
+</body>
+
+</html>
