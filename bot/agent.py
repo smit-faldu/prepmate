@@ -4,10 +4,9 @@ from langchain_core.messages import SystemMessage, AnyMessage
 from langchain_core.tools import tool
 from langgraph.graph.message import add_messages
 from langchain.agents import create_agent
-from langchain.agents.middleware import dynamic_prompt # [NEW] Import dynamic prompt decorator
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langchain.agents.middleware import dynamic_prompt, ModelRequest# from langgraph.checkpoint.sqlite import SqliteSaver
 from core.config import settings
-import sqlite3 # Make sure this is imported at the top
+# import sqlite3 # Make sure this is imported at the top
 # 1. State Definition
 class PitchState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
@@ -71,21 +70,20 @@ RULES FOR INTERACTION:
 
 
 # [NEW] 5. Wrap the modifier in the @dynamic_prompt middleware decorator
+# [NEW] Wrap the modifier in the @dynamic_prompt middleware decorator
 @dynamic_prompt
-def dynamic_shark_prompt(state: PitchState) -> str:
+def dynamic_shark_prompt(request: ModelRequest) -> str:
     """Injects the current stage into the prompt dynamically before the LLM generates a response."""
-    current_stage = state.get("current_stage", "1. Introduction")
+    # Access the state dictionary through the request object
+    current_stage = request.state.get("current_stage", "1. Introduction")
+    
     return f"{SHARK_SYSTEM_PROMPT}\n\n[SYSTEM CONTEXT]\nThe user is currently on stage: {current_stage}."
 
-# [NEW] 6. Initialize SQLite Checkpointer using the modern syntax
-db_conn = sqlite3.connect("memory.db", check_same_thread=False)
-memory = SqliteSaver(db_conn)
-
-# 7. Compile the Graph Agent with memory
-shark_agent = create_agent(
-    model=llm,
-    tools=[advance_pitch_stage, drop_out],
-    middleware=[dynamic_shark_prompt], 
-    state_schema=PitchState,
-    checkpointer=memory
-)
+def get_shark_agent(memory):
+    return create_agent(
+        model=llm,
+        tools=[advance_pitch_stage, drop_out],
+        middleware=[dynamic_shark_prompt], 
+        state_schema=PitchState,
+        checkpointer=memory
+    )

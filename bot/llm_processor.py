@@ -1,10 +1,11 @@
 import asyncio
 from loguru import logger
-from pipecat.frames.frames import Frame, TranscriptionFrame, OutputTransportMessageFrame, EndFrame, UserStartedSpeakingFrame
+from pipecat.frames.frames import Frame, TranscriptionFrame, OutputTransportMessageFrame, EndFrame, UserStartedSpeakingFrame, TextFrame
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
-from bot.agent import shark_agent
 from langchain_core.messages import HumanMessage, AIMessage
 from typing import List, Dict, Any, Optional
+from bot.agent import get_shark_agent
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 class LangGraphProcessor(FrameProcessor):
     def __init__(self, session_id: str = "shark_session_global"):
@@ -12,28 +13,43 @@ class LangGraphProcessor(FrameProcessor):
         # We no longer manually track `self.messages` because the Checkpointer does it.
         self._llm_task: Optional[asyncio.Task] = None
         self.session_id = session_id
+        self.current_stage = None # Initialize current_stage to prevent attribute errors
 
     async def _invoke_llm(self, user_text: str, direction: FrameDirection):
         try:
             logger.debug("Calling LangGraph Virtual Sharktank...")
-            # With memory enabled, we only need to pass the newest message
+            
             state_input = {
                 "messages": [HumanMessage(content=user_text)]
             }
             
-            # Use the global session config so memory is contiguous
             config = {"configurable": {"thread_id": self.session_id}}
             
-            response_state = await shark_agent.ainvoke(state_input, config)
+            # Use the Async context manager to handle the DB connection safely
+            async with AsyncSqliteSaver.from_conn_string("memory.db") as memory:
+                shark_agent = get_shark_agent(memory)
+                response_state = await shark_agent.ainvoke(state_input, config)
             
-            # The agent might have called a tool and added multiple messages
-            # We want the last message that the AI generated that has content
             final_ai_msg_str = ""
             is_dropping_out = False
             
             for msg in reversed(response_state["messages"]):
                 if msg.type == "ai" and msg.content:
-                    final_ai_msg_str = str(msg.content)
+                    
+                    # --- FIX: Parse the structured content to extract only text ---
+                    if isinstance(msg.content, list):
+                        for item in msg.content:
+                            if isinstance(item, dict) and item.get("type") == "text":
+                                final_ai_msg_str += item.get("text", "")
+                            elif isinstance(item, str):
+                                final_ai_msg_str += item
+                    elif isinstance(msg.content, str):
+                        final_ai_msg_str = msg.content
+                    else:
+                        final_ai_msg_str = str(msg.content)
+                    
+                    final_ai_msg_str = final_ai_msg_str.strip()
+                    # -------------------------------------------------------------
                     
                     # Also look for tool calls if any to update our local state
                     if hasattr(msg, "tool_calls") and msg.tool_calls:
@@ -56,6 +72,8 @@ class LangGraphProcessor(FrameProcessor):
             logger.success(f"🦈 Shark: {final_ai_msg_str}")
             msg = {"type": "llm_response", "text": final_ai_msg_str}
             await self.push_frame(OutputTransportMessageFrame(message=msg), direction)
+            # Send text frame to the TTS service downstream
+            await self.push_frame(TextFrame(final_ai_msg_str), direction)
             
             # If the shark dropped out, forcefully end the session
             if is_dropping_out:

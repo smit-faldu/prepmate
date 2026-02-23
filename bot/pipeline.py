@@ -10,6 +10,8 @@ from pipecat.services.whisper.stt import WhisperSTTService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pipecat.services.elevenlabs import ElevenLabsTTSService
+from core.config import settings
 
 from bot.llm_processor import LangGraphProcessor
 
@@ -24,8 +26,8 @@ async def run_bot_pipeline(sdp: str, type: str) -> dict:
         webrtc_connection=webrtc_connection,
         params=TransportParams(
             audio_in_enabled=True,
-            audio_out_enabled=False, 
-            vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=2.0)),
+            audio_out_enabled=True, 
+            vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=1.0)),
         )
     )
 
@@ -35,7 +37,13 @@ async def run_bot_pipeline(sdp: str, type: str) -> dict:
     # Instantiate the LangGraph processor for STT->LLM
     llm_processor = LangGraphProcessor()
 
-    pipeline = Pipeline([transport.input(), stt, llm_processor, transport.output()])
+    # Instantiate TTS Service
+    tts = ElevenLabsTTSService(
+        api_key=settings.ELEVENLABS_API_KEY,
+        voice_id=settings.ELEVENLABS_VOICE_ID,
+    )
+
+    pipeline = Pipeline([transport.input(), stt, llm_processor, tts, transport.output()])
     task = PipelineTask(pipeline)
 
     answer = webrtc_connection.get_answer()

@@ -3,140 +3,189 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Pipecat WebRTC STT</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrepMate | Virtual Shark Tank</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            font-family: system-ui, sans-serif;
-            max-width: 600px;
-            margin: 40px auto;
-            color: #333;
+        ::-webkit-scrollbar {
+            width: 6px;
         }
 
-        #transcripts {
-            background: #f9f9f9;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            min-height: 200px;
-            margin-top: 20px;
-            overflow-y: auto;
-            max-height: 400px;
+        ::-webkit-scrollbar-track {
+            background: transparent;
         }
 
-        #status {
-            margin-top: 10px;
-            font-weight: bold;
-            color: #555;
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
         }
 
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border-radius: 6px;
-            border: none;
-            background: #007bff;
-            color: white;
-        }
-
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-
-        .user-text {
-            margin-bottom: 10px;
-            line-height: 1.5;
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
         }
     </style>
 </head>
 
-<body>
-    <h1>Real-time Speech-to-Text</h1>
-    <button id="startBtn">Start Microphone</button>
-    <button id="stopBtn" disabled>Stop</button>
-    <div id="status">Status: Disconnected</div>
+<body class="bg-slate-50 h-screen flex flex-col font-sans text-slate-800">
 
-    <div id="transcripts">
-        <em>Transcriptions will appear here...</em>
-    </div>
+    <header class="bg-slate-900 text-white shadow-md p-4 flex justify-between items-center z-10">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-xl shadow-lg">🦈</div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">PrepMate</h1>
+                <p class="text-xs text-slate-400">Virtual Shark Tank Pitch Practice</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="relative flex h-3 w-3" id="status-indicator">
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-slate-500"></span>
+            </span>
+            <span class="text-sm font-medium text-slate-400" id="status-text">Disconnected</span>
+        </div>
+    </header>
+
+    <main id="chat-container" class="flex-1 overflow-y-auto p-6 flex flex-col gap-6 max-w-4xl mx-auto w-full">
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 p-4">
+        <div class="max-w-4xl mx-auto flex justify-center items-center gap-4">
+            <button id="connect-btn"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
+                Start Pitch (Connect Mic)
+            </button>
+        </div>
+    </footer>
+
+    <audio id="remote-audio" autoplay></audio>
 
     <script>
+        const chatContainer = document.getElementById('chat-container');
+        const connectBtn = document.getElementById('connect-btn');
+        const statusText = document.getElementById('status-text');
+        const statusIndicator = document.getElementById('status-indicator');
+        const remoteAudio = document.getElementById('remote-audio');
+
         let pc = null;
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const transcriptsDiv = document.getElementById('transcripts');
-        const statusDiv = document.getElementById('status');
+        let dc = null;
 
-        startBtn.onclick = async () => {
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            transcriptsDiv.innerHTML = '';
-            statusDiv.innerText = "Status: Connecting...";
+        function appendMessage(sender, text) {
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            let cleanText = text;
 
-            pc = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            });
-
-            pc.onconnectionstatechange = () => {
-                console.log("Connection State:", pc.connectionState);
-                statusDiv.innerText = `Status: ${pc.connectionState}`;
-            };
-
-            pc.oniceconnectionstatechange = () => {
-                console.log("ICE Connection State:", pc.iceConnectionState);
-                if (pc.iceConnectionState === "failed") {
-                    statusDiv.innerText = "Status: ICE Failed";
-                }
-            };
-
-            const dc = pc.createDataChannel("pipecat");
-            dc.onmessage = (e) => {
+            // Safety check for strinified JSON
+            if (typeof text === 'string' && text.trim().startsWith('[')) {
                 try {
-                    const data = JSON.parse(e.data);
-                    if (data.type === 'transcription') {
-                        transcriptsDiv.innerHTML += `<div class="user-text">🗣️ <b>You:</b> ${data.text}</div>`;
-                    } else if (data.type === 'llm_response') {
-                        transcriptsDiv.innerHTML += `<div class="user-text" style="color:#d9534f;">🦈 <b>Shark:</b> ${data.text}</div>`;
-                    }
-                    transcriptsDiv.scrollTop = transcriptsDiv.scrollHeight;
-                } catch (err) {
-                    console.log("Received data: ", e.data);
-                }
-            };
-
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-
-            const response = await fetch('/bot', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sdp: pc.localDescription.sdp,
-                    type: pc.localDescription.type
-                })
-            });
-
-            const answer = await response.json();
-            await pc.setRemoteDescription(answer);
-        };
-
-        stopBtn.onclick = () => {
-            if (pc) {
-                pc.close();
-                pc = null;
+                    const parsed = JSON.parse(text.replace(/'/g, '"'));
+                    if (Array.isArray(parsed) && parsed[0].text) cleanText = parsed[0].text;
+                } catch (e) { console.log("Raw text parsing failed, using as-is."); }
             }
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            statusDiv.innerText = "Status: Disconnected";
-            transcriptsDiv.innerHTML += `<div><em>Connection closed.</em></div>`;
-        };
+
+            const html = sender === 'user'
+                ? `
+                <div class="flex justify-end animate-fade-in-up">
+                    <div class="bg-blue-600 text-white max-w-[80%] rounded-2xl rounded-tr-sm px-5 py-3 shadow-sm">
+                        <p class="text-sm">${String(cleanText).replace(/\n/g, '<br>')}</p>
+                        <span class="text-[10px] text-blue-200 block mt-1 text-right">${time}</span>
+                    </div>
+                </div>`
+                : `
+                <div class="flex justify-start animate-fade-in-up">
+                    <div class="bg-white border border-slate-200 text-slate-800 max-w-[80%] rounded-2xl rounded-tl-sm px-5 py-3 shadow-sm">
+                        <p class="text-sm leading-relaxed">${String(cleanText).replace(/\n/g, '<br>')}</p>
+                        <span class="text-[10px] text-slate-400 block mt-1">${time}</span>
+                    </div>
+                </div>`;
+
+            chatContainer.insertAdjacentHTML('beforeend', html);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function startConnection() {
+            try {
+                // 1. Get Microphone Access
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // 2. Setup WebRTC Peer Connection
+                pc = new RTCPeerConnection();
+
+                // Listen for the Shark's audio track returning from the backend
+                pc.ontrack = (event) => {
+                    const el = document.getElementById('remote-audio');
+                    if (event.track.kind === 'audio') {
+                        el.srcObject = event.streams[0];
+                    }
+                };
+
+                // Add user's mic to the connection
+                stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+                // 3. Setup Data Channel (for text messages)
+                dc = pc.createDataChannel("pipecat", { ordered: true });
+                dc.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        // These match the 'type' keys we set in your Python LangGraphProcessor
+                        if (msg.type === 'transcription') {
+                            appendMessage('user', msg.text);
+                        } else if (msg.type === 'llm_response') {
+                            appendMessage('shark', msg.text);
+                        }
+                    } catch (e) {
+                        console.log("Received raw data: ", event.data);
+                    }
+                };
+
+                // 4. Create and Send Offer to Backend
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                statusText.innerText = "Connecting...";
+
+                // REPLACE THIS URL WITH YOUR ACTUAL BACKEND POST URL/PORT
+                const response = await fetch('http://127.0.0.1:8000/bot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sdp: pc.localDescription.sdp,
+                        type: pc.localDescription.type
+                    })
+                });
+
+                if (!response.ok) throw new Error("Backend rejected connection");
+
+                // 5. Handle Answer
+                const answer = await response.json();
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+                // Update UI
+                statusText.innerText = "Connected";
+                statusText.classList.replace('text-slate-400', 'text-emerald-400');
+                statusIndicator.innerHTML = `
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>`;
+
+                connectBtn.innerText = "End Pitch";
+                connectBtn.classList.replace('bg-blue-600', 'bg-red-500');
+                connectBtn.classList.replace('hover:bg-blue-700', 'hover:bg-red-600');
+
+                chatContainer.innerHTML = `<div class="text-center my-4"><span class="bg-slate-200 text-slate-600 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Started</span></div>`;
+
+            } catch (error) {
+                console.error("Error connecting:", error);
+                alert("Could not connect to the backend. Check the console and ensure your Python server is running.");
+                statusText.innerText = "Failed";
+            }
+        }
+
+        connectBtn.addEventListener('click', () => {
+            if (pc && pc.connectionState === 'connected') {
+                // Handle disconnect logic here
+                pc.close();
+                window.location.reload();
+            } else {
+                startConnection();
+            }
+        });
     </script>
 </body>
 
