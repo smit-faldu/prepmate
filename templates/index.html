@@ -45,6 +45,40 @@
     </header>
 
     <main id="chat-container" class="flex-1 overflow-y-auto p-6 flex flex-col gap-6 max-w-4xl mx-auto w-full">
+        <div id="persona-selection" class="flex flex-col gap-4 mb-4">
+            <h2 class="text-xl font-semibold mb-2 text-center text-slate-700">Select Your Shark</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Adam -->
+                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
+                    data-persona="adam" data-name="Adam (The Tough Negotiator)" data-emoji="🦈">
+                    <div class="text-4xl mb-2">🦈</div>
+                    <h3 class="font-bold text-lg text-slate-800">Adam</h3>
+                    <p class="text-sm text-slate-500 font-medium mb-2">The Tough Negotiator</p>
+                    <p class="text-xs text-slate-600">Blunt, numbers-driven, and highly analytical. Wants to see
+                        margins, revenue, and pure metrics.</p>
+                </div>
+                <!-- Sarah -->
+                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
+                    data-persona="sarah" data-name="Sarah (The Friendly Mentor)" data-emoji="👩‍💼">
+                    <div class="text-4xl mb-2">👩‍💼</div>
+                    <h3 class="font-bold text-lg text-slate-800">Sarah</h3>
+                    <p class="text-sm text-slate-500 font-medium mb-2">The Friendly Mentor</p>
+                    <p class="text-xs text-slate-600">Warm, encouraging, and supportive. Focuses on the founder's
+                        resilience, market fit, and journey.</p>
+                </div>
+                <!-- Charlie -->
+                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
+                    data-persona="charlie" data-name="Charlie (The Tech Visionary)" data-emoji="🚀">
+                    <div class="text-4xl mb-2">🚀</div>
+                    <h3 class="font-bold text-lg text-slate-800">Charlie</h3>
+                    <p class="text-sm text-slate-500 font-medium mb-2">The Tech Visionary</p>
+                    <p class="text-xs text-slate-600">High-energy and deeply technical. Hates buzzwords, loves scalable
+                        infrastructure and real tech moats.</p>
+                </div>
+            </div>
+            <p id="selection-warning" class="text-red-500 text-sm italic text-center hidden">Please select a shark to
+                continue.</p>
+        </div>
     </main>
 
     <footer class="bg-white border-t border-slate-200 p-4">
@@ -67,6 +101,24 @@
 
         let pc = null;
         let dc = null;
+        let selectedPersona = null;
+        let selectedPersonaName = "Shark";
+        let selectedPersonaEmoji = "🦈";
+
+        // Handle Persona Selection
+        const personaCards = document.querySelectorAll('.persona-card');
+        personaCards.forEach(card => {
+            card.addEventListener('click', () => {
+                // Deselect all
+                personaCards.forEach(c => c.classList.remove('border-blue-500', 'bg-blue-50'));
+                // Select clicked
+                card.classList.add('border-blue-500', 'bg-blue-50');
+                selectedPersona = card.dataset.persona;
+                selectedPersonaName = card.dataset.name;
+                selectedPersonaEmoji = card.dataset.emoji;
+                document.getElementById('selection-warning').classList.add('hidden');
+            });
+        });
 
         function appendMessage(sender, text) {
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -128,7 +180,7 @@
                         if (msg.type === 'transcription') {
                             appendMessage('user', msg.text);
                         } else if (msg.type === 'llm_response') {
-                            appendMessage('shark', msg.text);
+                            appendMessage(selectedPersonaName, msg.text);
                         }
                     } catch (e) {
                         console.log("Received raw data: ", event.data);
@@ -147,7 +199,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         sdp: pc.localDescription.sdp,
-                        type: pc.localDescription.type
+                        type: pc.localDescription.type,
+                        persona_id: selectedPersona
                     })
                 });
 
@@ -168,7 +221,11 @@
                 connectBtn.classList.replace('bg-blue-600', 'bg-red-500');
                 connectBtn.classList.replace('hover:bg-blue-700', 'hover:bg-red-600');
 
-                chatContainer.innerHTML = `<div class="text-center my-4"><span class="bg-slate-200 text-slate-600 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Started</span></div>`;
+                chatContainer.innerHTML = `<div class="text-center my-4"><span class="bg-slate-200 text-slate-600 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Started with ${selectedPersonaName}</span></div>`;
+
+                // Update Header
+                document.querySelector('header h1').innerText = selectedPersonaName;
+                document.querySelector('header .text-xl.shadow-lg').innerText = selectedPersonaEmoji;
 
             } catch (error) {
                 console.error("Error connecting:", error);
@@ -183,6 +240,10 @@
                 pc.close();
                 window.location.reload();
             } else {
+                if (!selectedPersona) {
+                    document.getElementById('selection-warning').classList.remove('hidden');
+                    return;
+                }
                 startConnection();
             }
         });

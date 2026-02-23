@@ -4,3 +4,4 @@ from pydantic import BaseModel
 class SessionProps(BaseModel):
     sdp: str
     type: str
+    persona_id: str = "adam"

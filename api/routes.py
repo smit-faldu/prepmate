@@ -11,7 +11,7 @@ router = APIRouter()
 @router.post("/bot")
 async def start_bot(props: SessionProps):
     try:
-        dict_answer = await run_bot_pipeline(sdp=props.sdp, type=props.type)
+        dict_answer = await run_bot_pipeline(sdp=props.sdp, type=props.type, persona_id=props.persona_id)
         return dict_answer
     except Exception as e:
         logger.exception(f"Failed to setup bot: {e}")

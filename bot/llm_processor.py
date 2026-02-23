@@ -8,11 +8,12 @@ from bot.agent import get_shark_agent
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 class LangGraphProcessor(FrameProcessor):
-    def __init__(self, session_id: str = "shark_session_global"):
+    def __init__(self, session_id: str = "shark_session_global", persona_id: str = "adam"):
         super().__init__()
         # We no longer manually track `self.messages` because the Checkpointer does it.
         self._llm_task: Optional[asyncio.Task] = None
         self.session_id = session_id
+        self.persona_id = persona_id
         self.current_stage = None # Initialize current_stage to prevent attribute errors
 
     async def _invoke_llm(self, user_text: str, direction: FrameDirection):
@@ -23,7 +24,7 @@ class LangGraphProcessor(FrameProcessor):
                 "messages": [HumanMessage(content=user_text)]
             }
             
-            config = {"configurable": {"thread_id": self.session_id}}
+            config = {"configurable": {"thread_id": self.session_id, "persona_id": self.persona_id}}
             
             # Use the Async context manager to handle the DB connection safely
             async with AsyncSqliteSaver.from_conn_string("memory.db") as memory:
