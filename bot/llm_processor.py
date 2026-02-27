@@ -1,6 +1,6 @@
 import asyncio
 from loguru import logger
-from pipecat.frames.frames import Frame, TranscriptionFrame, OutputTransportMessageFrame, EndFrame, UserStartedSpeakingFrame, TextFrame
+from pipecat.frames.frames import Frame, TranscriptionFrame, OutputTransportMessageFrame, EndFrame, UserStartedSpeakingFrame, TextFrame, LLMFullResponseEndFrame
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from langchain_core.messages import HumanMessage, AIMessage
 from typing import List, Dict, Any, Optional
@@ -21,7 +21,8 @@ class LangGraphProcessor(FrameProcessor):
             logger.debug("Calling LangGraph Virtual Sharktank...")
             
             state_input = {
-                "messages": [HumanMessage(content=user_text)]
+                "messages": [HumanMessage(content=user_text)],
+                "persona_id": self.persona_id
             }
             
             config = {"configurable": {"thread_id": self.session_id, "persona_id": self.persona_id}}
@@ -75,6 +76,7 @@ class LangGraphProcessor(FrameProcessor):
             await self.push_frame(OutputTransportMessageFrame(message=msg), direction)
             # Send text frame to the TTS service downstream
             await self.push_frame(TextFrame(final_ai_msg_str), direction)
+            await self.push_frame(LLMFullResponseEndFrame(), direction)
             
             # If the shark dropped out, forcefully end the session
             if is_dropping_out:

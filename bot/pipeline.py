@@ -14,7 +14,7 @@ from pipecat.services.elevenlabs import ElevenLabsTTSService
 from core.config import settings
 
 from bot.llm_processor import LangGraphProcessor
-from bot.agent import PERSONAS
+from bot.persona import PERSONAS
 
 async def run_bot_pipeline(sdp: str, type: str, persona_id: str = "adam") -> dict:
     """Sets up and runs the WebRTC STT Pipeline for a new connection."""
