@@ -28,7 +28,11 @@ async def run_bot_pipeline(sdp: str, type: str, persona_id: str = "adam") -> dic
         params=TransportParams(
             audio_in_enabled=True,
             audio_out_enabled=True, 
-            vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=1.0)),
+            vad_analyzer=SileroVADAnalyzer(params=VADParams(
+                stop_secs=0.8,      # Slightly faster turn-taking
+                min_volume=0.3,     # Ignores low-volume background noise
+                start_secs=0.2      # Requires consistent audio before triggering STT
+            )),
         )
     )
 

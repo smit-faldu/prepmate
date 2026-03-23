@@ -1,20 +1,25 @@
 import asyncio
 from loguru import logger
-from pipecat.frames.frames import Frame, TranscriptionFrame, OutputTransportMessageFrame, EndFrame, UserStartedSpeakingFrame, TextFrame, LLMFullResponseEndFrame
+from pipecat.frames.frames import (
+    Frame, TranscriptionFrame, OutputTransportMessageFrame, EndFrame, 
+    UserStartedSpeakingFrame, TextFrame, LLMFullResponseEndFrame,
+    BotStartedSpeakingFrame, BotStoppedSpeakingFrame, CancelFrame
+)
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
-from langchain_core.messages import HumanMessage, AIMessage
-from typing import List, Dict, Any, Optional
+from langchain_core.messages import HumanMessage
+from typing import Optional
 from bot.agent import get_shark_agent
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 class LangGraphProcessor(FrameProcessor):
     def __init__(self, session_id: str = "shark_session_global", persona_id: str = "adam"):
         super().__init__()
-        # We no longer manually track `self.messages` because the Checkpointer does it.
         self._llm_task: Optional[asyncio.Task] = None
         self.session_id = session_id
         self.persona_id = persona_id
-        self.current_stage = None # Initialize current_stage to prevent attribute errors
+        self.current_stage = None
+        self.bot_is_speaking = False
+        self.pending_dropout = False
 
     async def _invoke_llm(self, user_text: str, direction: FrameDirection):
         try:
@@ -38,7 +43,7 @@ class LangGraphProcessor(FrameProcessor):
             for msg in reversed(response_state["messages"]):
                 if msg.type == "ai" and msg.content:
                     
-                    # --- FIX: Parse the structured content to extract only text ---
+                    # Parse the structured content to extract only text
                     if isinstance(msg.content, list):
                         for item in msg.content:
                             if isinstance(item, dict) and item.get("type") == "text":
@@ -51,9 +56,8 @@ class LangGraphProcessor(FrameProcessor):
                         final_ai_msg_str = str(msg.content)
                     
                     final_ai_msg_str = final_ai_msg_str.strip()
-                    # -------------------------------------------------------------
                     
-                    # Also look for tool calls if any to update our local state
+                    # Look for tool calls to update local state
                     if hasattr(msg, "tool_calls") and msg.tool_calls:
                         for tool_call in msg.tool_calls:
                             if tool_call["name"] == "advance_pitch_stage":
@@ -72,17 +76,23 @@ class LangGraphProcessor(FrameProcessor):
                 return
                 
             logger.success(f"🦈 Shark: {final_ai_msg_str}")
+            
+            # 1. Send the PROPERLY punctuated text to the frontend chat UI
             msg = {"type": "llm_response", "text": final_ai_msg_str}
             await self.push_frame(OutputTransportMessageFrame(message=msg), direction)
-            # Send text frame to the TTS service downstream
-            await self.push_frame(TextFrame(final_ai_msg_str), direction)
+            
+            # 2. Fix terminal punctuation for smoother TTS (Prevents sentence gaps)
+            tts_text = final_ai_msg_str.replace('.', ',').replace('!', ',').replace('?', ',')
+            
+            # 3. Send the modified text frame to the TTS service
+            await self.push_frame(TextFrame(tts_text), direction)
             await self.push_frame(LLMFullResponseEndFrame(), direction)
             
-            # If the shark dropped out, forcefully end the session
+            # 4. Handle "I'm out" logic
             if is_dropping_out:
-                logger.warning("Terminating session pipeline due to Shark dropping out.")
-                # Pushing EndFrame signals Pipecat to cleanup and stop the runner
-                await self.push_frame(EndFrame(), direction)
+                logger.warning("Shark dropped out. Waiting for TTS to finish before ending session...")
+                self.pending_dropout = True 
+                self.bot_is_speaking = True # Lock STT so the user can't interrupt the final speech
 
         except asyncio.CancelledError:
             logger.warning("LLM task was cancelled due to user interruption.")
@@ -92,14 +102,45 @@ class LangGraphProcessor(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        if isinstance(frame, UserStartedSpeakingFrame):
+        # --- Track Bot Speaking State ---
+        if isinstance(frame, BotStartedSpeakingFrame):
+            logger.info("🤖 Bot started speaking. Locking STT.")
+            self.bot_is_speaking = True
+            await self.push_frame(frame, direction)
+            return
+
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            logger.info("🤖 Bot stopped speaking. Unlocking STT.")
+            self.bot_is_speaking = False
+            await self.push_frame(frame, direction)
+            
+            # Trigger Shutdown if the Shark dropped out
+            if self.pending_dropout:
+                logger.warning("🎙️ Final speech complete. Dropping call now.")
+                await self.push_frame(EndFrame(), direction)
+            return
+
+        # --- Handle User Interruption ---
+        elif isinstance(frame, UserStartedSpeakingFrame):
+            if self.bot_is_speaking:
+                # Ignore the VAD trigger if it's just the bot's own echo
+                return
+            
             if self._llm_task and not self._llm_task.done():
-                logger.info("🗣️ User interrupted! Cancelling current LLM response...")
+                logger.info("🗣️ User started speaking! Cancelling current LLM response...")
                 self._llm_task.cancel()
                 self._llm_task = None
+                await self.push_frame(CancelFrame(), direction) # Explicitly halt downstream TTS
+            
             await self.push_frame(frame, direction)
 
+        # --- Handle Transcription ---
         elif isinstance(frame, TranscriptionFrame):
+            if self.bot_is_speaking:
+                # Discard transcriptions generated by the bot's echo
+                logger.debug("Discarding transcription: Bot is currently speaking.")
+                return
+
             user_text = frame.text.strip()
             if not user_text:
                 return
@@ -110,19 +151,19 @@ class LangGraphProcessor(FrameProcessor):
             user_msg = {"type": "transcription", "text": user_text}
             await self.push_frame(OutputTransportMessageFrame(message=user_msg), direction)
 
-            # Cancel any existing task just in case
+            # Cancel any existing task and flush TTS buffers
             if self._llm_task and not self._llm_task.done():
                 self._llm_task.cancel()
+                await self.push_frame(CancelFrame(), direction)
 
             # Spawn a new background task for the LLM
             self._llm_task = asyncio.create_task(self._invoke_llm(user_text, direction))
                 
         elif isinstance(frame, EndFrame):
-            # Clean up memory if needed, though this processor instance is 
-            # tied to the pipeline lifecycle
             if self._llm_task and not self._llm_task.done():
                 self._llm_task.cancel()
             await self.push_frame(frame, direction)
+            
         else:
             # Pass all other frames through untouched
             await self.push_frame(frame, direction)

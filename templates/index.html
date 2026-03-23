@@ -48,63 +48,50 @@
         <div id="persona-selection" class="flex flex-col gap-4 mb-4">
             <h2 class="text-xl font-semibold mb-2 text-center text-slate-700">Select Your Shark</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Adam -->
                 <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
                     data-persona="adam" data-name="Adam (The Tough Negotiator)" data-emoji="🦈">
                     <div class="text-4xl mb-2">🦈</div>
                     <h3 class="font-bold text-lg text-slate-800">Adam</h3>
                     <p class="text-sm text-slate-500 font-medium mb-2">The Tough Negotiator</p>
-                    <p class="text-xs text-slate-600">Blunt, numbers-driven, and highly analytical. Wants to see
-                        margins, revenue, and pure metrics.</p>
+                    <p class="text-xs text-slate-600">Blunt, numbers-driven, and highly analytical. Wants to see margins, revenue, and pure metrics.</p>
                 </div>
-                <!-- Sarah -->
                 <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
                     data-persona="sarah" data-name="Sarah (The Friendly Mentor)" data-emoji="👩‍💼">
                     <div class="text-4xl mb-2">👩‍💼</div>
                     <h3 class="font-bold text-lg text-slate-800">Sarah</h3>
                     <p class="text-sm text-slate-500 font-medium mb-2">The Friendly Mentor</p>
-                    <p class="text-xs text-slate-600">Warm, encouraging, and supportive. Focuses on the founder's
-                        resilience, market fit, and journey.</p>
+                    <p class="text-xs text-slate-600">Warm, encouraging, and supportive. Focuses on the founder's resilience, market fit, and journey.</p>
                 </div>
-                <!-- Charlie -->
                 <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
                     data-persona="charlie" data-name="Charlie (The Tech Visionary)" data-emoji="🚀">
                     <div class="text-4xl mb-2">🚀</div>
                     <h3 class="font-bold text-lg text-slate-800">Charlie</h3>
                     <p class="text-sm text-slate-500 font-medium mb-2">The Tech Visionary</p>
-                    <p class="text-xs text-slate-600">High-energy and deeply technical. Hates buzzwords, loves scalable
-                        infrastructure and real tech moats.</p>
+                    <p class="text-xs text-slate-600">High-energy and deeply technical. Hates buzzwords, loves scalable infrastructure and real tech moats.</p>
                 </div>
-                <!-- Roger -->
                 <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
                     data-persona="roger" data-name="Roger (The Lifestyle Investor)" data-emoji="🏄‍♂️">
                     <div class="text-4xl mb-2">🏄‍♂️</div>
                     <h3 class="font-bold text-lg text-slate-800">Roger</h3>
                     <p class="text-sm text-slate-500 font-medium mb-2">The Lifestyle Investor</p>
-                    <p class="text-xs text-slate-600">Laid-back, trendy, and branding-obsessed. Wants to know your CAC,
-                        viral potential, and consumer appeal.</p>
+                    <p class="text-xs text-slate-600">Laid-back, trendy, and branding-obsessed. Wants to know your CAC, viral potential, and consumer appeal.</p>
                 </div>
-                <!-- Alice -->
                 <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
                     data-persona="alice" data-name="Alice (The Industry Expert)" data-emoji="📊">
                     <div class="text-4xl mb-2">📊</div>
                     <h3 class="font-bold text-lg text-slate-800">Alice</h3>
                     <p class="text-sm text-slate-500 font-medium mb-2">The Industry Expert</p>
-                    <p class="text-xs text-slate-600">Formal, data-driven, and highly educated. Demands concrete market
-                        research, B2B sales cycles, and churn metrics.</p>
+                    <p class="text-xs text-slate-600">Formal, data-driven, and highly educated. Demands concrete market research, B2B sales cycles, and churn metrics.</p>
                 </div>
-                <!-- River -->
                 <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
                     data-persona="river" data-name="River (The Gen-Z Marketer)" data-emoji="📱">
                     <div class="text-4xl mb-2">📱</div>
                     <h3 class="font-bold text-lg text-slate-800">River</h3>
                     <p class="text-sm text-slate-500 font-medium mb-2">The Gen-Z Marketer</p>
-                    <p class="text-xs text-slate-600">Fast-paced social media guru. Looks for influencer marketing
-                        strategies and massive viral growth on TikTok.</p>
+                    <p class="text-xs text-slate-600">Fast-paced social media guru. Looks for influencer marketing strategies and massive viral growth on TikTok.</p>
                 </div>
             </div>
-            <p id="selection-warning" class="text-red-500 text-sm italic text-center hidden">Please select a shark to
-                continue.</p>
+            <p id="selection-warning" class="text-red-500 text-sm italic text-center hidden">Please select a shark to continue.</p>
         </div>
     </main>
 
@@ -151,7 +138,6 @@
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             let cleanText = text;
 
-            // Safety check for strinified JSON
             if (typeof text === 'string' && text.trim().startsWith('[')) {
                 try {
                     const parsed = JSON.parse(text.replace(/'/g, '"'));
@@ -179,15 +165,42 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
+        // --- NEW: Reusable UI Reset Function ---
+        function resetUI() {
+            statusText.innerText = "Disconnected";
+            statusText.classList.remove('text-emerald-400');
+            statusText.classList.add('text-slate-400');
+            
+            statusIndicator.innerHTML = `
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-slate-500"></span>`;
+
+            connectBtn.innerText = "Start Pitch (Connect Mic)";
+            connectBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+            connectBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+
+            chatContainer.insertAdjacentHTML('beforeend', `<div class="text-center my-4"><span class="bg-slate-200 text-slate-600 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Ended</span></div>`);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+        }
+
         async function startConnection() {
             try {
-                // 1. Get Microphone Access
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-                // 2. Setup WebRTC Peer Connection
                 pc = new RTCPeerConnection();
 
-                // Listen for the Shark's audio track returning from the backend
+                // --- NEW: Listen for Server-Side Disconnects (Shark Dropping Out) ---
+                pc.onconnectionstatechange = () => {
+                    console.log("Connection state changed to:", pc.connectionState);
+                    if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+                        // If the backend drops the call, reset the UI
+                        resetUI();
+                    }
+                };
+
                 pc.ontrack = (event) => {
                     const el = document.getElementById('remote-audio');
                     if (event.track.kind === 'audio') {
@@ -195,15 +208,12 @@
                     }
                 };
 
-                // Add user's mic to the connection
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-                // 3. Setup Data Channel (for text messages)
                 dc = pc.createDataChannel("pipecat", { ordered: true });
                 dc.onmessage = (event) => {
                     try {
                         const msg = JSON.parse(event.data);
-                        // These match the 'type' keys we set in your Python LangGraphProcessor
                         if (msg.type === 'transcription') {
                             appendMessage('user', msg.text);
                         } else if (msg.type === 'llm_response') {
@@ -214,13 +224,11 @@
                     }
                 };
 
-                // 4. Create and Send Offer to Backend
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
 
                 statusText.innerText = "Connecting...";
 
-                // REPLACE THIS URL WITH YOUR ACTUAL BACKEND POST URL/PORT
                 const response = await fetch('http://127.0.0.1:8000/bot', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -233,11 +241,10 @@
 
                 if (!response.ok) throw new Error("Backend rejected connection");
 
-                // 5. Handle Answer
                 const answer = await response.json();
                 await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-                // Update UI
+                // Update UI to Connected
                 statusText.innerText = "Connected";
                 statusText.classList.replace('text-slate-400', 'text-emerald-400');
                 statusIndicator.innerHTML = `
@@ -248,9 +255,8 @@
                 connectBtn.classList.replace('bg-blue-600', 'bg-red-500');
                 connectBtn.classList.replace('hover:bg-blue-700', 'hover:bg-red-600');
 
-                chatContainer.innerHTML = `<div class="text-center my-4"><span class="bg-slate-200 text-slate-600 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Started with ${selectedPersonaName}</span></div>`;
-
-                // Update Header
+                chatContainer.insertAdjacentHTML('beforeend', `<div class="text-center my-4"><span class="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Started with ${selectedPersonaName}</span></div>`);
+                
                 document.querySelector('header h1').innerText = selectedPersonaName;
                 document.querySelector('header .text-xl.shadow-lg').innerText = selectedPersonaEmoji;
 
@@ -263,9 +269,8 @@
 
         connectBtn.addEventListener('click', () => {
             if (pc && pc.connectionState === 'connected') {
-                // Handle disconnect logic here
-                pc.close();
-                window.location.reload();
+                // If user clicks "End Pitch", manually reset UI and close connection
+                resetUI();
             } else {
                 if (!selectedPersona) {
                     document.getElementById('selection-warning').classList.remove('hidden');
@@ -276,5 +281,4 @@
         });
     </script>
 </body>
-
 </html>

@@ -34,13 +34,14 @@ def advance_pitch_stage(current_stage: str, next_stage: str) -> str:
 
 @tool
 def drop_out(reason: str) -> str:
-    """Call this tool when the user's pitch is irredeemably bad, they are entirely unprepared, or they refuse to answer directly after multiple attempts to clarify.
-    This effectively ends the session ("I'm out.")
+    """CRITICAL: Call this tool to end the session when the pitch is irredeemably bad or the user refuses to answer directly.
+    
+    WARNING: This tool silently ends the call. You MUST simultaneously generate a spoken text response explaining to the user exactly why you are dropping out, and you MUST end your spoken sentence with "I am out."
     
     Args:
-        reason: The reason why you are dropping out.
+        reason: A short internal system note on why you are dropping out.
     """
-    return f"System: You have dropped out. The session is ending."
+    return "System: You have dropped out. The session is ending. Do not generate further questions."
 
 from bot.persona import PERSONAS
 
