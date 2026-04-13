@@ -11,3 +11,6 @@ langgraph-checkpoint-sqlite
 pipecat-ai[silero,whisper,elevenlabs]
 aiortc
 opencv-python
+hsemotion
+ultralytics
+timm<1.0

@@ -7,7 +7,7 @@ from ultralytics import YOLO
 from hsemotion.facial_emotions import HSEmotionRecognizer
 
 from pipecat.processors.frame_processor import FrameProcessor, FrameDirection
-from pipecat.frames.frames import Frame, UserImageRawFrame, LLMMessagesAppendFrame ,TransportMessageFrame
+from pipecat.frames.frames import Frame, UserImageRawFrame, LLMMessagesAppendFrame, TransportMessageFrame, OutputTransportMessageFrame
 import torch
 
 class MultimodalVisionProcessor(FrameProcessor):
@@ -59,6 +59,11 @@ class MultimodalVisionProcessor(FrameProcessor):
             # Offload heavy CV inference to a background thread to keep asyncio unblocked
             state_message = await asyncio.to_thread(self._analyze_frame, frame)
 
+            if state_message:
+                # Always send to frontend for realtime updates
+                msg = {"type": "vision_update", "text": state_message}
+                await self.push_frame(OutputTransportMessageFrame(message=msg), direction)
+
             # If we detected a valid state and it changed from the last known state
             if state_message and state_message != self.last_state:
                 self.last_state = state_message
@@ -87,8 +92,8 @@ class MultimodalVisionProcessor(FrameProcessor):
             else:
                 return None # Drop unsupported formats gracefully
             
-            # 2. YOLOv11 Pose Detection
-            results = self.yolo(img, verbose=False, conf=0.5)
+            # 2. YOLOv11 Pose Detection (Forced on CPU)
+            results = self.yolo(img, verbose=False, conf=0.5, device="cpu")
             
             if not results or len(results[0].boxes) == 0:
                 return "User is not visible on camera."
@@ -115,15 +120,28 @@ class MultimodalVisionProcessor(FrameProcessor):
                         emotion, scores = self.emotion_recognizer.predict_emotions(face_rgb)
                         emotion_str = emotion
 
-            # 4. Gesture Detection (Wrist vs Nose Y-Coordinates)
+            # 4. Gesture Detection (Wrist vs Elbow/Shoulder Y-Coordinates)
             gesture_str = "hands are down"
             if len(keypoints) > 10:
+                l_shoulder_y = keypoints[5][1]
+                r_shoulder_y = keypoints[6][1]
+                l_elbow_y = keypoints[7][1]
+                r_elbow_y = keypoints[8][1]
                 l_wrist_y = keypoints[9][1]
                 r_wrist_y = keypoints[10][1]
-                nose_y = keypoints[0][1]
 
-                # If wrists are higher than the nose, they are actively gesturing near face
-                if (l_wrist_y > 0 and l_wrist_y < nose_y) or (r_wrist_y > 0 and r_wrist_y < nose_y):
+                # In OpenCV, Y=0 is the top of the image.
+                # If wrists are higher than the elbows, the forearms are raised (chest-level gesturing)
+                l_gesturing = (l_wrist_y > 0 and l_elbow_y > 0 and l_wrist_y < l_elbow_y)
+                r_gesturing = (r_wrist_y > 0 and r_elbow_y > 0 and r_wrist_y < r_elbow_y)
+                
+                # If wrists are higher than shoulders, hands are way up
+                l_high = (l_wrist_y > 0 and l_shoulder_y > 0 and l_wrist_y < l_shoulder_y)
+                r_high = (r_wrist_y > 0 and r_shoulder_y > 0 and r_wrist_y < r_shoulder_y)
+
+                if l_high or r_high:
+                    gesture_str = "raising their hands high"
+                elif l_gesturing or r_gesturing:
                     gesture_str = "actively gesturing with hands"
 
             return f"User is visibly {emotion_str} and their {gesture_str}."

@@ -1,0 +1,43 @@
+Traceback (most recent call last):
+  File "<string>", line 16, in <module>
+    res = rec.predict_emotions(img)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\hsemotion\facial_emotions.py", line 74, in predict_emotions
+    features=self.extract_features(face_img)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\hsemotion\facial_emotions.py", line 69, in extract_features
+    features = self.model(img_tensor.to(self.device))
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\timm\models\efficientnet.py", line 348, in forward
+    x = self.forward_features(x)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\timm\models\efficientnet.py", line 326, in forward_features
+    x = self.blocks(x)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\container.py", line 253, in forward
+    input = module(input)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\container.py", line 253, in forward
+    input = module(input)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\extra\prepmate\.venv\Lib\site-packages\timm\models\_efficientnet_blocks.py", line 220, in forward
+    if self.conv_s2d is not None:
+       ^^^^^^^^^^^^^
+  File "D:\extra\prepmate\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1968, in __getattr__
+    raise AttributeError(
+        f"'{type(self).__name__}' object has no attribute '{name}'"
+    )
+AttributeError: 'DepthwiseSeparableConv' object has no attribute 'conv_s2d'. Did you mean: 'conv_dw'?

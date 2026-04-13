@@ -27,6 +27,7 @@ async def run_bot_pipeline(sdp: str, type: str, persona_id: str = "adam") -> dic
     transport = SmallWebRTCTransport(
         webrtc_connection=webrtc_connection,
         params=TransportParams(
+            camera_in_enabled=True,
             audio_in_enabled=True,
             audio_out_enabled=True, 
             vad_analyzer=SileroVADAnalyzer(params=VADParams(
