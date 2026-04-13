@@ -7,99 +7,146 @@
     <title>PrepMate | Virtual Shark Tank</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .mirror-video { transform: scaleX(-1); }
     </style>
 </head>
 
-<body class="bg-slate-50 h-screen flex flex-col font-sans text-slate-800">
+<body class="bg-[#202124] h-screen w-screen flex flex-col font-sans text-white overflow-hidden">
 
-    <header class="bg-slate-900 text-white shadow-md p-4 flex justify-between items-center z-10">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-xl shadow-lg">🦈</div>
-            <div>
-                <h1 class="text-xl font-bold tracking-tight">PrepMate</h1>
-                <p class="text-xs text-slate-400">Virtual Shark Tank Pitch Practice</p>
-            </div>
-        </div>
+    <header class="h-12 flex justify-between items-center px-4 shrink-0">
         <div class="flex items-center gap-2">
-            <span class="relative flex h-3 w-3" id="status-indicator">
-                <span class="relative inline-flex rounded-full h-3 w-3 bg-slate-500"></span>
-            </span>
-            <span class="text-sm font-medium text-slate-400" id="status-text">Disconnected</span>
+            <span class="text-xl">🦈</span>
+            <h1 class="text-lg font-medium text-gray-200">PrepMate Pitch</h1>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-gray-400 font-medium" id="time-display">
+            00:00
         </div>
     </header>
 
-    <main id="chat-container" class="flex-1 overflow-y-auto p-6 flex flex-col gap-6 max-w-4xl mx-auto w-full">
-        <div id="persona-selection" class="flex flex-col gap-4 mb-4">
-            <h2 class="text-xl font-semibold mb-2 text-center text-slate-700">Select Your Shark</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
-                    data-persona="adam" data-name="Adam (The Tough Negotiator)" data-emoji="🦈">
-                    <div class="text-4xl mb-2">🦈</div>
-                    <h3 class="font-bold text-lg text-slate-800">Adam</h3>
-                    <p class="text-sm text-slate-500 font-medium mb-2">The Tough Negotiator</p>
-                    <p class="text-xs text-slate-600">Blunt, numbers-driven, and highly analytical. Wants to see margins, revenue, and pure metrics.</p>
+    <main class="flex-1 relative flex overflow-hidden">
+
+        <div id="lobby-view" class="absolute inset-0 z-50 bg-[#202124] flex flex-col items-center justify-center p-6 overflow-y-auto transition-opacity duration-300">
+            <div class="max-w-4xl w-full flex flex-col gap-6">
+                <div class="text-center">
+                    <h2 class="text-3xl font-normal text-white mb-2">Ready to pitch?</h2>
+                    <p class="text-gray-400">Select your investor to begin the session.</p>
                 </div>
-                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
-                    data-persona="sarah" data-name="Sarah (The Friendly Mentor)" data-emoji="👩‍💼">
-                    <div class="text-4xl mb-2">👩‍💼</div>
-                    <h3 class="font-bold text-lg text-slate-800">Sarah</h3>
-                    <p class="text-sm text-slate-500 font-medium mb-2">The Friendly Mentor</p>
-                    <p class="text-xs text-slate-600">Warm, encouraging, and supportive. Focuses on the founder's resilience, market fit, and journey.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="persona-card border border-[#3c4043] rounded-2xl p-5 cursor-pointer hover:bg-[#3c4043] transition-all bg-[#202124]"
+                        data-persona="adam" data-name="Adam" data-emoji="🦈">
+                        <div class="text-4xl mb-3">🦈</div>
+                        <h3 class="font-medium text-lg text-white">Adam</h3>
+                        <p class="text-sm text-gray-400 font-medium mb-2">The Tough Negotiator</p>
+                        <p class="text-xs text-gray-500">Blunt, numbers-driven, and highly analytical.</p>
+                    </div>
+                    <div class="persona-card border border-[#3c4043] rounded-2xl p-5 cursor-pointer hover:bg-[#3c4043] transition-all bg-[#202124]"
+                        data-persona="sarah" data-name="Sarah" data-emoji="👩‍💼">
+                        <div class="text-4xl mb-3">👩‍💼</div>
+                        <h3 class="font-medium text-lg text-white">Sarah</h3>
+                        <p class="text-sm text-gray-400 font-medium mb-2">The Friendly Mentor</p>
+                        <p class="text-xs text-gray-500">Warm, encouraging, and supportive.</p>
+                    </div>
+                    <div class="persona-card border border-[#3c4043] rounded-2xl p-5 cursor-pointer hover:bg-[#3c4043] transition-all bg-[#202124]"
+                        data-persona="charlie" data-name="Charlie" data-emoji="🚀">
+                        <div class="text-4xl mb-3">🚀</div>
+                        <h3 class="font-medium text-lg text-white">Charlie</h3>
+                        <p class="text-sm text-gray-400 font-medium mb-2">The Tech Visionary</p>
+                        <p class="text-xs text-gray-500">High-energy and deeply technical. Hates buzzwords.</p>
+                    </div>
+                    <div class="persona-card border border-[#3c4043] rounded-2xl p-5 cursor-pointer hover:bg-[#3c4043] transition-all bg-[#202124]"
+                        data-persona="roger" data-name="Roger" data-emoji="🏄‍♂️">
+                        <div class="text-4xl mb-3">🏄‍♂️</div>
+                        <h3 class="font-medium text-lg text-white">Roger</h3>
+                        <p class="text-sm text-gray-400 font-medium mb-2">The Lifestyle Investor</p>
+                        <p class="text-xs text-gray-500">Laid-back, trendy, and branding-obsessed.</p>
+                    </div>
+                    <div class="persona-card border border-[#3c4043] rounded-2xl p-5 cursor-pointer hover:bg-[#3c4043] transition-all bg-[#202124]"
+                        data-persona="alice" data-name="Alice" data-emoji="📊">
+                        <div class="text-4xl mb-3">📊</div>
+                        <h3 class="font-medium text-lg text-white">Alice</h3>
+                        <p class="text-sm text-gray-400 font-medium mb-2">The Industry Expert</p>
+                        <p class="text-xs text-gray-500">Formal, data-driven, and highly educated.</p>
+                    </div>
+                    <div class="persona-card border border-[#3c4043] rounded-2xl p-5 cursor-pointer hover:bg-[#3c4043] transition-all bg-[#202124]"
+                        data-persona="river" data-name="River" data-emoji="📱">
+                        <div class="text-4xl mb-3">📱</div>
+                        <h3 class="font-medium text-lg text-white">River</h3>
+                        <p class="text-sm text-gray-400 font-medium mb-2">The Gen-Z Marketer</p>
+                        <p class="text-xs text-gray-500">Fast-paced social media guru.</p>
+                    </div>
                 </div>
-                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
-                    data-persona="charlie" data-name="Charlie (The Tech Visionary)" data-emoji="🚀">
-                    <div class="text-4xl mb-2">🚀</div>
-                    <h3 class="font-bold text-lg text-slate-800">Charlie</h3>
-                    <p class="text-sm text-slate-500 font-medium mb-2">The Tech Visionary</p>
-                    <p class="text-xs text-slate-600">High-energy and deeply technical. Hates buzzwords, loves scalable infrastructure and real tech moats.</p>
-                </div>
-                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
-                    data-persona="roger" data-name="Roger (The Lifestyle Investor)" data-emoji="🏄‍♂️">
-                    <div class="text-4xl mb-2">🏄‍♂️</div>
-                    <h3 class="font-bold text-lg text-slate-800">Roger</h3>
-                    <p class="text-sm text-slate-500 font-medium mb-2">The Lifestyle Investor</p>
-                    <p class="text-xs text-slate-600">Laid-back, trendy, and branding-obsessed. Wants to know your CAC, viral potential, and consumer appeal.</p>
-                </div>
-                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
-                    data-persona="alice" data-name="Alice (The Industry Expert)" data-emoji="📊">
-                    <div class="text-4xl mb-2">📊</div>
-                    <h3 class="font-bold text-lg text-slate-800">Alice</h3>
-                    <p class="text-sm text-slate-500 font-medium mb-2">The Industry Expert</p>
-                    <p class="text-xs text-slate-600">Formal, data-driven, and highly educated. Demands concrete market research, B2B sales cycles, and churn metrics.</p>
-                </div>
-                <div class="persona-card border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-500 transition-all bg-white"
-                    data-persona="river" data-name="River (The Gen-Z Marketer)" data-emoji="📱">
-                    <div class="text-4xl mb-2">📱</div>
-                    <h3 class="font-bold text-lg text-slate-800">River</h3>
-                    <p class="text-sm text-slate-500 font-medium mb-2">The Gen-Z Marketer</p>
-                    <p class="text-xs text-slate-600">Fast-paced social media guru. Looks for influencer marketing strategies and massive viral growth on TikTok.</p>
+
+                <div class="flex flex-col items-center mt-6">
+                    <p id="selection-warning" class="text-red-400 text-sm mb-4 hidden">Please select a shark to continue.</p>
+                    <button id="connect-btn" class="bg-[#8ab4f8] hover:bg-[#aecbfa] text-gray-900 px-8 py-3 rounded-full font-medium transition-colors shadow-sm focus:outline-none w-full max-w-sm">
+                        Join session (Connect Camera & Mic)
+                    </button>
+                    <p id="status-text" class="text-sm text-gray-400 mt-4">Hardware access required.</p>
                 </div>
             </div>
-            <p id="selection-warning" class="text-red-500 text-sm italic text-center hidden">Please select a shark to continue.</p>
         </div>
+
+        <div id="incall-view" class="flex-1 flex w-full h-full opacity-0 pointer-events-none transition-opacity duration-500">
+            
+            <div class="flex-1 p-4 flex flex-col relative">
+                <div class="relative w-full h-full bg-[#3c4043] rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
+                    
+                    <video id="local-video" autoplay muted playsinline class="absolute w-full h-full object-cover mirror-video"></video>
+                    
+                    <div class="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-3">
+                        <span id="in-call-emoji" class="text-2xl">🦈</span>
+                        <div class="flex flex-col">
+                            <span id="in-call-name" class="font-medium text-sm text-white">Shark</span>
+                            <div class="flex items-center gap-1">
+                                <span class="relative flex h-2 w-2">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span class="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold">Active Pipeline</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="absolute bottom-4 left-4 bg-black/70 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-600/50 flex items-start gap-3 max-w-md shadow-lg">
+                        <div class="mt-0.5">
+                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-[10px] uppercase tracking-wider text-blue-400 font-bold mb-0.5">Vision Analysis (Live)</span>
+                            <span id="vision-hud-text" class="text-sm font-medium text-gray-200 leading-snug">Waiting for video stream...</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="w-80 lg:w-96 bg-[#202124] flex flex-col p-4 pl-0 shrink-0">
+                <div class="bg-[#28292c] rounded-2xl h-full flex flex-col border border-[#3c4043] overflow-hidden">
+                    <div class="p-4 border-b border-[#3c4043] flex items-center justify-between shrink-0">
+                        <h3 class="font-medium text-gray-200">In-call messages</h3>
+                    </div>
+                    
+                    <div id="chat-container" class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+                        <div class="text-center my-2">
+                            <span class="bg-[#3c4043] text-gray-300 text-[10px] font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Log</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
     </main>
 
-    <footer class="bg-white border-t border-slate-200 p-4">
-        <div class="max-w-4xl mx-auto flex justify-center items-center gap-4">
-            <button id="connect-btn"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
-                Start Pitch (Connect Mic)
+    <footer id="control-bar" class="h-20 bg-[#202124] flex items-center justify-center shrink-0 opacity-0 pointer-events-none transition-opacity duration-500 pb-4">
+        <div class="flex items-center gap-4">
+            <button id="end-call-btn" class="bg-[#ea4335] hover:bg-[#d93025] text-white h-14 px-8 rounded-full flex items-center justify-center transition-colors shadow-lg group">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z"></path></svg>
             </button>
         </div>
     </footer>
@@ -107,11 +154,19 @@
     <audio id="remote-audio" autoplay></audio>
 
     <script>
+        // DOM Elements
+        const lobbyView = document.getElementById('lobby-view');
+        const incallView = document.getElementById('incall-view');
+        const controlBar = document.getElementById('control-bar');
+        
         const chatContainer = document.getElementById('chat-container');
         const connectBtn = document.getElementById('connect-btn');
+        const endCallBtn = document.getElementById('end-call-btn');
         const statusText = document.getElementById('status-text');
-        const statusIndicator = document.getElementById('status-indicator');
+        
+        const localVideo = document.getElementById('local-video');
         const remoteAudio = document.getElementById('remote-audio');
+        const visionHudText = document.getElementById('vision-hud-text');
 
         let pc = null;
         let dc = null;
@@ -119,14 +174,23 @@
         let selectedPersonaName = "Shark";
         let selectedPersonaEmoji = "🦈";
 
+        // Update Clock
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('time-display').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }, 1000);
+
         // Handle Persona Selection
         const personaCards = document.querySelectorAll('.persona-card');
         personaCards.forEach(card => {
             card.addEventListener('click', () => {
-                // Deselect all
-                personaCards.forEach(c => c.classList.remove('border-blue-500', 'bg-blue-50'));
-                // Select clicked
-                card.classList.add('border-blue-500', 'bg-blue-50');
+                personaCards.forEach(c => {
+                    c.classList.remove('border-[#8ab4f8]', 'bg-[#3c4043]');
+                    c.classList.add('border-[#3c4043]', 'bg-[#202124]');
+                });
+                card.classList.remove('border-[#3c4043]', 'bg-[#202124]');
+                card.classList.add('border-[#8ab4f8]', 'bg-[#3c4043]');
+                
                 selectedPersona = card.dataset.persona;
                 selectedPersonaName = card.dataset.name;
                 selectedPersonaEmoji = card.dataset.emoji;
@@ -134,6 +198,7 @@
             });
         });
 
+        // Chat Formatting
         function appendMessage(sender, text) {
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             let cleanText = text;
@@ -147,17 +212,17 @@
 
             const html = sender === 'user'
                 ? `
-                <div class="flex justify-end animate-fade-in-up">
-                    <div class="bg-blue-600 text-white max-w-[80%] rounded-2xl rounded-tr-sm px-5 py-3 shadow-sm">
-                        <p class="text-sm">${String(cleanText).replace(/\n/g, '<br>')}</p>
-                        <span class="text-[10px] text-blue-200 block mt-1 text-right">${time}</span>
+                <div class="flex flex-col items-end animate-fade-in-up">
+                    <span class="text-[10px] text-gray-500 mb-1">You • ${time}</span>
+                    <div class="bg-[#8ab4f8] text-gray-900 text-sm max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5">
+                        <p>${String(cleanText).replace(/\n/g, '<br>')}</p>
                     </div>
                 </div>`
                 : `
-                <div class="flex justify-start animate-fade-in-up">
-                    <div class="bg-white border border-slate-200 text-slate-800 max-w-[80%] rounded-2xl rounded-tl-sm px-5 py-3 shadow-sm">
-                        <p class="text-sm leading-relaxed">${String(cleanText).replace(/\n/g, '<br>')}</p>
-                        <span class="text-[10px] text-slate-400 block mt-1">${time}</span>
+                <div class="flex flex-col items-start animate-fade-in-up">
+                    <span class="text-[10px] text-gray-500 mb-1">${selectedPersonaName} • ${time}</span>
+                    <div class="bg-[#3c4043] border border-[#5f6368] text-gray-200 text-sm max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-2.5">
+                        <p class="leading-relaxed">${String(cleanText).replace(/\n/g, '<br>')}</p>
                     </div>
                 </div>`;
 
@@ -165,21 +230,43 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        // --- NEW: Reusable UI Reset Function ---
-        function resetUI() {
-            statusText.innerText = "Disconnected";
-            statusText.classList.remove('text-emerald-400');
-            statusText.classList.add('text-slate-400');
+        function updateVisionHud(text) {
+            // Clean up internal system tag
+            const cleanText = text.replace('[VISUAL CONTEXT UPDATE - DO NOT READ ALOUD: ', '').replace(']', '');
             
-            statusIndicator.innerHTML = `
-                <span class="relative inline-flex rounded-full h-3 w-3 bg-slate-500"></span>`;
+            // Update the live HUD overlay on the video
+            visionHudText.innerText = cleanText;
 
-            connectBtn.innerText = "Start Pitch (Connect Mic)";
-            connectBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
-            connectBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-
-            chatContainer.insertAdjacentHTML('beforeend', `<div class="text-center my-4"><span class="bg-slate-200 text-slate-600 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Ended</span></div>`);
+            // Also add a subtle log to the chat window
+            const html = `
+                <div class="flex justify-center animate-fade-in-up my-1">
+                    <div class="text-[10px] text-gray-500 flex items-center gap-1 bg-[#28292c] border border-[#3c4043] px-2 py-1 rounded">
+                        <span>👁️</span> <span class="italic">${cleanText}</span>
+                    </div>
+                </div>`;
+            chatContainer.insertAdjacentHTML('beforeend', html);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function resetUI() {
+            // Swap Views
+            incallView.classList.replace('opacity-100', 'opacity-0');
+            incallView.classList.add('pointer-events-none');
+            controlBar.classList.replace('opacity-100', 'opacity-0');
+            controlBar.classList.add('pointer-events-none');
+            
+            setTimeout(() => {
+                lobbyView.classList.remove('opacity-0', 'pointer-events-none');
+            }, 300);
+
+            connectBtn.innerText = "Join session (Connect Camera & Mic)";
+            statusText.innerText = "Hardware access required.";
+
+            // Stop Video Stream
+            if (localVideo.srcObject) {
+                localVideo.srcObject.getTracks().forEach(track => track.stop());
+                localVideo.srcObject = null;
+            }
 
             if (pc) {
                 pc.close();
@@ -189,22 +276,23 @@
 
         async function startConnection() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                statusText.innerText = "Requesting permissions...";
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                
+                // Show local video preview
+                localVideo.srcObject = stream;
+
                 pc = new RTCPeerConnection();
 
-                // --- NEW: Listen for Server-Side Disconnects (Shark Dropping Out) ---
                 pc.onconnectionstatechange = () => {
-                    console.log("Connection state changed to:", pc.connectionState);
                     if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed' || pc.connectionState === 'failed') {
-                        // If the backend drops the call, reset the UI
                         resetUI();
                     }
                 };
 
                 pc.ontrack = (event) => {
-                    const el = document.getElementById('remote-audio');
                     if (event.track.kind === 'audio') {
-                        el.srcObject = event.streams[0];
+                        remoteAudio.srcObject = event.streams[0];
                     }
                 };
 
@@ -218,16 +306,19 @@
                             appendMessage('user', msg.text);
                         } else if (msg.type === 'llm_response') {
                             appendMessage(selectedPersonaName, msg.text);
+                        } else if (msg.type === 'vision_update') {
+                            updateVisionHud(msg.text);
                         }
                     } catch (e) {
-                        console.log("Received raw data: ", event.data);
+                        console.log("Raw data: ", event.data);
                     }
                 };
 
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
 
-                statusText.innerText = "Connecting...";
+                statusText.innerText = "Connecting to Pipeline...";
+                connectBtn.innerText = "Connecting...";
 
                 const response = await fetch('http://127.0.0.1:8000/bot', {
                     method: 'POST',
@@ -244,41 +335,39 @@
                 const answer = await response.json();
                 await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-                // Update UI to Connected
-                statusText.innerText = "Connected";
-                statusText.classList.replace('text-slate-400', 'text-emerald-400');
-                statusIndicator.innerHTML = `
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>`;
-
-                connectBtn.innerText = "End Pitch";
-                connectBtn.classList.replace('bg-blue-600', 'bg-red-500');
-                connectBtn.classList.replace('hover:bg-blue-700', 'hover:bg-red-600');
-
-                chatContainer.insertAdjacentHTML('beforeend', `<div class="text-center my-4"><span class="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Session Started with ${selectedPersonaName}</span></div>`);
+                // Switch UI to In-Call Mode
+                lobbyView.classList.add('opacity-0', 'pointer-events-none');
                 
-                document.querySelector('header h1').innerText = selectedPersonaName;
-                document.querySelector('header .text-xl.shadow-lg').innerText = selectedPersonaEmoji;
+                setTimeout(() => {
+                    incallView.classList.replace('opacity-0', 'opacity-100');
+                    incallView.classList.remove('pointer-events-none');
+                    controlBar.classList.replace('opacity-0', 'opacity-100');
+                    controlBar.classList.remove('pointer-events-none');
+                }, 300);
+
+                // Update In-Call Info
+                document.getElementById('in-call-name').innerText = selectedPersonaName;
+                document.getElementById('in-call-emoji').innerText = selectedPersonaEmoji;
+                visionHudText.innerText = "Analyzing expression...";
 
             } catch (error) {
                 console.error("Error connecting:", error);
-                alert("Could not connect to the backend. Check the console and ensure your Python server is running.");
-                statusText.innerText = "Failed";
+                alert("Could not connect. Ensure camera/mic permissions are allowed and the server is running.");
+                statusText.innerText = "Connection failed.";
+                connectBtn.innerText = "Retry Connection";
             }
         }
 
+        // Event Listeners
         connectBtn.addEventListener('click', () => {
-            if (pc && pc.connectionState === 'connected') {
-                // If user clicks "End Pitch", manually reset UI and close connection
-                resetUI();
-            } else {
-                if (!selectedPersona) {
-                    document.getElementById('selection-warning').classList.remove('hidden');
-                    return;
-                }
-                startConnection();
+            if (!selectedPersona) {
+                document.getElementById('selection-warning').classList.remove('hidden');
+                return;
             }
+            startConnection();
         });
+
+        endCallBtn.addEventListener('click', resetUI);
     </script>
 </body>
 </html>

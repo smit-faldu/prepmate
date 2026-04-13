@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage
 from typing import Optional
 from bot.agent import get_shark_agent
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from pipecat.frames.frames import LLMMessagesAppendFrame
 
 class LangGraphProcessor(FrameProcessor):
     def __init__(self, session_id: str = "shark_session_global", persona_id: str = "adam"):
@@ -163,7 +164,29 @@ class LangGraphProcessor(FrameProcessor):
             if self._llm_task and not self._llm_task.done():
                 self._llm_task.cancel()
             await self.push_frame(frame, direction)
+        # --- Handle Visual Context Injection ---
+        elif isinstance(frame, LLMMessagesAppendFrame):
+            logger.debug(f"Storing visual context: {frame.messages[0]['content']}")
             
+            # ==========================================
+            # NEW: SEND VISION UPDATE TO THE FRONTEND
+            # ==========================================
+            msg = {"type": "vision_update", "text": frame.messages[0]['content']}
+            await self.push_frame(OutputTransportMessageFrame(message=msg), direction)
+            # ==========================================
+            
+            async def _update_memory():
+                from bot.agent import get_shark_agent 
+                from langchain_core.messages import SystemMessage
+                from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+                
+                async with AsyncSqliteSaver.from_conn_string("memory.db") as memory:
+                    shark_agent = get_shark_agent(memory)
+                    config = {"configurable": {"thread_id": self.session_id, "persona_id": self.persona_id}}
+                    await shark_agent.aupdate_state(config, {"messages": [SystemMessage(content=frame.messages[0]['content'])]})
+            
+            asyncio.create_task(_update_memory())
+            return
         else:
             # Pass all other frames through untouched
             await self.push_frame(frame, direction)

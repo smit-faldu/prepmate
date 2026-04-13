@@ -10,8 +10,9 @@ from pipecat.services.whisper.stt import WhisperSTTService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
-from pipecat.services.elevenlabs import ElevenLabsTTSService
+from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
 from core.config import settings
+from bot.vision_processor import MultimodalVisionProcessor
 
 from bot.llm_processor import LangGraphProcessor
 from bot.persona import PERSONAS
@@ -48,8 +49,15 @@ async def run_bot_pipeline(sdp: str, type: str, persona_id: str = "adam") -> dic
         api_key=settings.ELEVENLABS_API_KEY,
         voice_id=tts_voice_id,
     )
-
-    pipeline = Pipeline([transport.input(), stt, llm_processor, tts, transport.output()])
+    vision_processor = MultimodalVisionProcessor(target_fps=3.0)
+    pipeline = Pipeline([
+        transport.input(), 
+        vision_processor,  # <--- Added Here
+        stt, 
+        llm_processor, 
+        tts, 
+        transport.output()
+    ])
     task = PipelineTask(pipeline)
 
     answer = webrtc_connection.get_answer()
