@@ -50,7 +50,7 @@ async def run_bot_pipeline(sdp: str, type: str, persona_id: str = "adam") -> dic
         api_key=settings.ELEVENLABS_API_KEY,
         voice_id=tts_voice_id,
     )
-    vision_processor = MultimodalVisionProcessor(target_fps=3.0)
+    vision_processor = MultimodalVisionProcessor(target_fps=1.0)
     pipeline = Pipeline([
         transport.input(), 
         vision_processor,  # <--- Added Here

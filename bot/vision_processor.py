@@ -697,6 +697,7 @@ class MultimodalVisionProcessor(FrameProcessor):
         self.gesture_classifier  = GestureClassifier()
         self.emotion_tracker     = EmotionTracker(ema_alpha=0.3, micro_threshold=0.55)
         self.temporal_buffer     = TemporalBuffer(window_secs=window_secs)
+        self._is_processing = False
 
     # ------------------------------------------------------------------
     # Frame entry point
@@ -704,6 +705,9 @@ class MultimodalVisionProcessor(FrameProcessor):
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
+        
+        # 1. Always push the frame down for Audio/VAD to work!
+        await self.push_frame(frame, direction)
 
         if not isinstance(frame, UserImageRawFrame):
             return
@@ -711,14 +715,24 @@ class MultimodalVisionProcessor(FrameProcessor):
         current_time = time.time()
         if current_time - self.last_process_time < self.min_frame_interval:
             return
-        self.last_process_time = current_time
 
-        # Offload heavy inference to a thread pool
-        signal = await asyncio.to_thread(self._analyze_frame, frame)
+        # 2. ADD THIS: If vision is already analyzing a frame, skip this one
+        if self._is_processing:
+            return 
+
+        self.last_process_time = current_time
+        
+        # 3. ADD THIS: Lock the state while processing
+        self._is_processing = True
+        try:
+            # Offload heavy inference to a thread pool
+            signal = await asyncio.to_thread(self._analyze_frame, frame)
+        finally:
+            # Unlock the state when done
+            self._is_processing = False
 
         if signal is None:
             return
-
         # Push real-time per-frame update to the frontend
         realtime_payload = {
             "type": "vision_frame_update",
