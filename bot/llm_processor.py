@@ -21,6 +21,7 @@ class LangGraphProcessor(FrameProcessor):
         self.current_stage = None
         self.bot_is_speaking = False
         self.pending_dropout = False
+        self._background_tasks = set()
 
     async def _invoke_llm(self, user_text: str, direction: FrameDirection):
         try:
@@ -185,7 +186,9 @@ class LangGraphProcessor(FrameProcessor):
                     config = {"configurable": {"thread_id": self.session_id, "persona_id": self.persona_id}}
                     await shark_agent.aupdate_state(config, {"messages": [SystemMessage(content=frame.messages[0]['content'])]})
             
-            asyncio.create_task(_update_memory())
+            mem_task = asyncio.create_task(_update_memory())
+            self._background_tasks.add(mem_task)
+            mem_task.add_done_callback(self._background_tasks.discard)
             return
         else:
             # Pass all other frames through untouched

@@ -13,9 +13,12 @@ from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
 from core.config import settings
 from bot.vision_processor import MultimodalVisionProcessor
+from pipecat.pipeline.task import PipelineParams, PipelineTask
 
 from bot.llm_processor import LangGraphProcessor
 from bot.persona import PERSONAS
+
+background_tasks = set()
 
 async def run_bot_pipeline(sdp: str, type: str, persona_id: str = "adam") -> dict:
     """Sets up and runs the WebRTC STT Pipeline for a new connection."""
@@ -31,6 +34,8 @@ async def run_bot_pipeline(sdp: str, type: str, persona_id: str = "adam") -> dic
             audio_in_enabled=True,
             audio_out_enabled=True, 
             vad_analyzer=SileroVADAnalyzer(params=VADParams(
+                sample_rate=16000,
+                confidence=0.7,
                 stop_secs=0.8,      # Slightly faster turn-taking
                 min_volume=0.3,     # Ignores low-volume background noise
                 start_secs=0.2      # Requires consistent audio before triggering STT
@@ -59,15 +64,22 @@ async def run_bot_pipeline(sdp: str, type: str, persona_id: str = "adam") -> dic
         tts, 
         transport.output()
     ])
-    task = PipelineTask(pipeline)
+    pipeline_params = PipelineParams(
+    allow_interruptions=False,  # <-- ADD THIS LINE
+    enable_metrics=True,        # (optional, keep whatever else you have)
+    enable_usage_metrics=True   # (optional)
+)
+    task = PipelineTask(pipeline, params=pipeline_params)
 
     answer = webrtc_connection.get_answer()
     
     runner = PipelineRunner(handle_sigint=False)
     bg_task = asyncio.create_task(runner.run(task))
+    background_tasks.add(bg_task)
 
     # IMPORTANT: Catch and log any silent errors from the background pipeline!
     def handle_pipeline_result(t):
+        background_tasks.discard(t)
         try:
             t.result()
             logger.info("Pipeline finished successfully.")
