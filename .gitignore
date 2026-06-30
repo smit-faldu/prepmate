@@ -1,0 +1,85 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Installer logs
+pip-log.txt
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+venv.bak/
+
+# Pytest, coverage, and test outputs
+.pytest_cache/
+.cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+
+# Django / Flask stuff
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+instance/
+
+# Unit test / coverage reports
+coverage.xml
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Env files and secrets
+.env
+.env.*
+secrets.json
+credentials.json
+
+# Node modules (if any)
+node_modules/
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.pid
+
+# Compiled dynamic libraries
+*.dylib
+*.dll
+
+# Archives
+*.zip
+*.tar.gz
+*.rar

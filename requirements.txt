@@ -1,0 +1,12 @@
+pipecat-ai[whisper,local,websocket]
+fastapi
+uvicorn
+python-dotenv
+loguru
+
+# ── LangGraph multi-agent stack ───────────────────────────────────────────────
+langgraph
+langgraph-checkpoint-sqlite
+langchain
+langchain-core
+langchain-google-genai

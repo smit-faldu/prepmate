@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrepMate — VC Pitch Arena</title>
+  <meta name="description" content="Face a sharp AI Venture Capitalist. Pitch your startup live and get real-time multi-agent evaluation across 4 stages: Introduction, Deep Dive, Negotiation, and Decision.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/vc_styles.css">
+</head>
+<body>
+
+<!-- Animated background -->
+<div class="bg-scene" aria-hidden="true"></div>
+
+<div class="app-wrapper">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="app-header" role="banner">
+    <div class="brand">
+      <div class="brand-logo" aria-hidden="true">💼</div>
+      <div>
+        <div class="brand-name">PrepMate <span style="color:var(--gold-primary)">VC Arena</span></div>
+        <div class="brand-tagline">Multi-Agent Pitch Evaluator · Powered by LangGraph + Gemini</div>
+      </div>
+    </div>
+
+    <!-- Stage Progress Tracker -->
+    <nav class="stage-tracker glass-card" aria-label="Pitch stage progress" role="navigation">
+      <div class="stage-step active" data-stage="intro" id="step-intro">
+        <span class="step-dot"></span> Introduction
+      </div>
+      <div class="stage-step" data-stage="deep_dive" id="step-deep_dive">
+        <span class="step-dot"></span> Deep Dive
+      </div>
+      <div class="stage-step" data-stage="negotiation" id="step-negotiation">
+        <span class="step-dot"></span> Negotiation
+      </div>
+      <div class="stage-step" data-stage="decision" id="step-decision">
+        <span class="step-dot"></span> Decision
+      </div>
+    </nav>
+
+    <div class="header-right">
+      <div class="conn-status" id="conn-status" role="status" aria-live="polite">
+        <span class="conn-dot"></span>
+        <span id="conn-text">Disconnected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main Grid ───────────────────────────────────────────────────────── -->
+  <main class="arena-grid" role="main">
+
+    <!-- LEFT: VC Investor Card + Pitch Intelligence -->
+    <aside class="vc-panel" aria-label="VC investor profile">
+
+      <div class="glass-card" style="margin-bottom:14px">
+        <!-- VC Identity -->
+        <div class="vc-identity">
+          <div class="vc-avatar-wrap">
+            <img
+              id="vc-avatar"
+              class="vc-avatar"
+              src="/static/img/vc_avatar.png"
+              alt="Marcus Reid, Managing Partner"
+              onerror="this.style.display='none'; document.getElementById('vc-avatar-fallback').style.display='flex'"
+            >
+            <!-- Fallback avatar if image missing -->
+            <div id="vc-avatar-fallback" style="
+              display:none; width:80px; height:80px; border-radius:50%;
+              background:linear-gradient(135deg,#1a1a3a,#2a2a4a);
+              border:3px solid var(--gold-primary);
+              box-shadow:0 0 28px rgba(201,162,39,0.35);
+              align-items:center; justify-content:center;
+              font-size:32px;
+            " aria-hidden="true">🤵</div>
+            <div class="vc-mood-badge" id="vc-mood" aria-label="VC mood: interested">🧐</div>
+          </div>
+          <div class="vc-name">Marcus Reid</div>
+          <div class="vc-title">Managing Partner · Reid Capital</div>
+          <div class="vc-status-pill" id="vc-status-pill">
+            <span class="pill-dot"></span>
+            <span id="vc-status-text">Listening</span>
+          </div>
+        </div>
+
+        <!-- VC Stats -->
+        <div class="vc-stats">
+          <div class="stat-row">
+            <span class="stat-label">Fund Size</span>
+            <span class="stat-value">$400M</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Portfolio</span>
+            <span class="stat-value">47 AI Startups</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Sweet Spot</span>
+            <span class="stat-value">$250K – $5M</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Focus</span>
+            <span class="stat-value">AI-First B2B</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pitch Intelligence Panel -->
+      <div class="glass-card">
+        <div class="intel-panel-header">
+          <h3>Pitch Intelligence</h3>
+          <span class="exchange-badge" id="exchange-count" aria-live="polite">Turn 0</span>
+        </div>
+        <div class="intel-body" id="intel-body">
+
+          <div class="intel-item" id="intel-product">
+            <div class="intel-item-label">Product</div>
+            <div class="intel-item-value" id="intel-product-val">—</div>
+          </div>
+
+          <div class="intel-item" id="intel-market">
+            <div class="intel-item-label">Market Claim</div>
+            <div class="intel-item-value" id="intel-market-val">—</div>
+          </div>
+
+          <div class="intel-item" id="intel-ask">
+            <div class="intel-item-label">Ask</div>
+            <div class="intel-item-value" id="intel-ask-val">—</div>
+          </div>
+
+          <div class="intel-item" id="intel-traction">
+            <div class="intel-item-label">Traction</div>
+            <div class="intel-item-value" id="intel-traction-val">—</div>
+          </div>
+
+          <div class="intel-item" id="intel-clarity">
+            <div class="intel-item-label">Clarity Score</div>
+            <div class="clarity-bar">
+              <div class="clarity-track">
+                <div class="clarity-fill" id="clarity-fill"></div>
+              </div>
+              <div class="clarity-score-label" id="clarity-score-label">—</div>
+            </div>
+          </div>
+
+          <div class="intel-item" id="intel-flags" style="display:none">
+            <div class="intel-item-label" style="color:var(--accent-red)">⚠ Red Flags</div>
+            <div class="red-flags-list" id="red-flags-list"></div>
+          </div>
+
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER: Live Conversation Feed -->
+    <section class="chat-panel glass-card" aria-label="Pitch conversation">
+      <div class="chat-header">
+        <span class="chat-title">Live Pitch Session</span>
+        <div class="live-indicator" id="live-indicator" aria-live="polite">
+          <span class="live-dot"></span> LIVE
+        </div>
+      </div>
+
+      <!-- Message feed -->
+      <div class="chat-feed" id="chat-feed" role="log" aria-live="polite" aria-label="Conversation messages">
+        <!-- Empty state -->
+        <div class="chat-empty" id="chat-empty">
+          <div class="chat-empty-icon" aria-hidden="true">🎙️</div>
+          <h3>Ready to Hear Your Pitch</h3>
+          <p>Click the microphone below and start speaking. Marcus Reid is listening — make it count.</p>
+        </div>
+      </div>
+
+      <!-- VC Thinking Indicator -->
+      <div class="vc-thinking" id="vc-thinking" aria-live="polite" aria-label="VC is thinking">
+        <span>Marcus is evaluating...</span>
+        <div class="thinking-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <!-- Interim transcript bar -->
+      <div class="interim-bar" aria-live="polite" role="status">
+        <span class="interim-icon" aria-hidden="true">🎤</span>
+        <span class="interim-content" id="interim-content">Start speaking to pitch your idea...</span>
+      </div>
+    </section>
+
+    <!-- RIGHT: Audio Visualizer + Stage Info -->
+    <aside class="viz-panel" aria-label="Audio visualizer and stage info">
+
+      <div class="glass-card">
+        <div class="viz-header">Audio Input</div>
+        <div class="viz-canvas-wrap">
+          <canvas id="vc-visualizer" width="240" height="100" aria-label="Audio waveform visualizer"></canvas>
+        </div>
+
+        <!-- Market validity badge -->
+        <div class="market-badge not_mentioned" id="market-badge" aria-live="polite">
+          Market: —
+        </div>
+
+        <!-- Stage info block -->
+        <div class="stage-info-block" style="border-top:1px solid var(--border)">
+          <div class="intel-item-label">Current Stage</div>
+          <div class="stage-badge" data-stage="intro" id="stage-badge">
+            🌱 Introduction
+          </div>
+          <div class="stage-desc" id="stage-desc">
+            Introduce your product, target audience, and funding ask clearly.
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ── Controls Bar ────────────────────────────────────────────────────── -->
+  <div class="controls-bar" role="toolbar" aria-label="Pitch controls">
+    <div class="conn-status" id="conn-status-2" aria-live="polite">
+      <span class="conn-dot"></span>
+      <span id="conn-text-2">Press mic to start</span>
+    </div>
+
+    <button id="mic-btn" class="mic-btn" aria-label="Start recording microphone" aria-pressed="false">
+      <span class="mic-ripple" aria-hidden="true"></span>
+      <span class="mic-ripple" aria-hidden="true"></span>
+      <span id="mic-icon" aria-hidden="true">🎤</span>
+    </button>
+
+    <div class="controls-info">
+      <div class="controls-label" id="controls-label">Start Pitch</div>
+      <div class="controls-sublabel" id="controls-sublabel">Click mic &amp; speak clearly</div>
+    </div>
+  </div>
+
+</div><!-- /.app-wrapper -->
+
+<!-- ── "I'm Out" Overlay ─────────────────────────────────────────────────── -->
+<div id="out-overlay" role="dialog" aria-modal="true" aria-labelledby="out-title" aria-hidden="true">
+  <div class="out-card">
+    <div class="out-icon" aria-hidden="true">🚫</div>
+    <h2 class="out-title" id="out-title">I'm Out.</h2>
+    <p class="out-reason" id="out-reason">The pitch session has ended.</p>
+    <button class="out-close-btn" id="out-close-btn" onclick="dismissOut()">Start New Session</button>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="/static/js/pcm-processor.js" defer></script>
+<script src="/static/js/vc_client.js" defer></script>
+</body>
+</html>

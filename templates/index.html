@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Whisper VAD & STT - Pipecat Agent</title>
+    <meta name="description" content="An interactive, high-performance real-time speech transcription pipeline powered by Pipecat and local Whisper.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Main stylesheet link -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="background-glow"></div>
+    
+    <main class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <h1 class="logo-title">
+                <span class="icon">🎙️</span> Pipecat Whisper <span class="gradient-text">VAD+STT</span>
+            </h1>
+            <p class="logo-subtitle">Real-time local speech-to-text with Voice Activity Detection</p>
+        </header>
+
+        <!-- Main Grid -->
+        <div class="app-grid">
+            <!-- Left Panel: Controls & Visualizer -->
+            <section class="control-panel glass">
+                <div class="panel-section">
+                    <h2>Connection & Settings</h2>
+                    <div class="setting-group">
+                        <label for="model-select">Whisper Model Size</label>
+                        <select id="model-select">
+                            <option value="tiny">Tiny (Fastest, ~75MB)</option>
+                            <option value="base" selected>Base (Recommended, ~140MB)</option>
+                            <option value="small">Small (More accurate, ~460MB)</option>
+                            <option value="medium">Medium (High accuracy, ~1.5GB)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="visualizer-section">
+                    <div class="visualizer-container">
+                        <canvas id="visualizer" width="300" height="150"></canvas>
+                        <div id="status-indicator" class="status-badge disconnected">
+                            <span class="status-dot"></span> <span id="status-text">Disconnected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-section">
+                    <button id="record-btn" class="btn btn-record" aria-label="Start recording microphone">
+                        <span class="btn-icon">🎤</span> <span id="btn-text">Start Listening</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Right Panel: Transcripts -->
+            <section class="transcript-panel glass">
+                <div class="panel-header">
+                    <h2>Live Transcript Output</h2>
+                    <button id="clear-btn" class="btn-text-only" aria-label="Clear transcripts">Clear</button>
+                </div>
+                
+                <div class="transcript-display" id="transcript-display">
+                    <!-- Placeholder when empty -->
+                    <div id="empty-state" class="empty-state">
+                        <div class="empty-icon">💬</div>
+                        <p>Your transcribed text will appear here in real-time.</p>
+                        <span class="hint">Click "Start Listening" and grant mic access to begin speaking.</span>
+                    </div>
+                    <!-- Transcripts container -->
+                    <div id="transcript-list" class="transcript-list"></div>
+                </div>
+
+                <!-- Interim Transcription Overlay (Floating at bottom of transcript) -->
+                <div class="interim-container" id="interim-container">
+                    <div class="interim-indicator">🎙️ Live:</div>
+                    <div class="interim-text" id="interim-text">...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>Powered by <a href="https://pipecat.ai" target="_blank" rel="noopener">Pipecat AI</a> & Faster-Whisper. Offline & Secure.</p>
+        </footer>
+    </main>
+
+    <!-- Client application JS -->
+    <script src="/static/js/client.js"></script>
+</body>
+</html>

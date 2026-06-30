@@ -1,0 +1,253 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://docs.pipecat.ai/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# SmallWebRTCTransport
+
+> A lightweight WebRTC transport for peer-to-peer audio and video communication in Pipecat
+
+## Overview
+
+`SmallWebRTCTransport` enables peer-to-peer ("serverless") WebRTC connections between clients and your Pipecat application. It implements bidirectional audio, video and data channels using WebRTC for real-time communication. This transport is open source and self-contained, with no dependencies on any other infrastructure.
+
+<Tip>
+  For detailed notes on how to decide between using the SmallWebRTCTransport or
+  other WebRTC transports like the DailyTransport, see [this
+  post](https://www.daily.co/blog/you-dont-need-a-webrtc-server-for-your-voice-agents/).
+</Tip>
+
+<CardGroup cols={2}>
+  <Card title="SmallWebRTC Transport API Reference" icon="code" href="https://reference-server.pipecat.ai/en/latest/api/pipecat.transports.smallwebrtc.transport.html">
+    Transport methods and configuration options
+  </Card>
+
+  <Card title="SmallWebRTC Connection API Reference" icon="code" href="https://reference-server.pipecat.ai/en/latest/api/pipecat.transports.smallwebrtc.connection.html">
+    Connection management and signaling methods
+  </Card>
+
+  <Card title="Example Implementation" icon="play" href="https://github.com/pipecat-ai/pipecat-examples/tree/main/p2p-webrtc/pipecat-cloud">
+    Complete peer-to-peer voice agent example
+  </Card>
+
+  <Card title="WebRTC Documentation" icon="book" href="https://webrtc.org/getting-started/overview">
+    Official WebRTC protocol documentation
+  </Card>
+</CardGroup>
+
+## Installation
+
+To use SmallWebRTCTransport, install the required dependencies:
+
+```bash theme={null}
+uv add "pipecat-ai[webrtc]"
+```
+
+## Prerequisites
+
+### WebRTC Application Setup
+
+Before using SmallWebRTCTransport, you need:
+
+1. **Signaling Server**: Implement WebRTC offer/answer exchange (required)
+2. **Client Implementation**: Set up WebRTC client for browser or application use
+3. **ICE Configuration**: Configure STUN/TURN servers for NAT traversal (optional for local networks) — see [ICE Servers Configuration](#ice-servers-configuration)
+4. **Development Runner**: Use Pipecat's development runner for quick setup (recommended)
+
+<Tip>
+  No API keys are required since this is a peer-to-peer transport
+  implementation. For production deployments across different networks, you may
+  need to configure STUN/TURN servers for NAT traversal.
+</Tip>
+
+### Configuration Options
+
+* **Development Runner**: Automatic server infrastructure and web interface (recommended)
+* **Manual Implementation**: Custom signaling server for advanced use cases
+* **ICE Servers**: STUN/TURN configuration for network traversal
+* **Media Configuration**: Audio/video parameters and format handling
+
+### Key Features
+
+* **Serverless Architecture**: Direct peer-to-peer connections with no intermediate servers
+* **Production Ready**: Heavily tested and used in Pipecat examples
+* **Bidirectional Media**: Full-duplex audio and video streaming
+* **Data Channels**: Application messaging and signaling support
+* **Development Tools**: Built-in development runner with web interface
+
+## Configuration
+
+### SmallWebRTCTransport
+
+<ParamField path="webrtc_connection" type="SmallWebRTCConnection" required>
+  The underlying WebRTC connection handler that manages signaling and peer
+  connections.
+</ParamField>
+
+<ParamField path="params" type="TransportParams" required>
+  Transport configuration parameters for audio, video, and VAD settings.
+</ParamField>
+
+<ParamField path="input_name" type="str" default="None">
+  Optional name for the input transport processor.
+</ParamField>
+
+<ParamField path="output_name" type="str" default="None">
+  Optional name for the output transport processor.
+</ParamField>
+
+## Usage
+
+SmallWebRTCTransport requires both a signaling server for WebRTC handshake and your Pipecat bot implementation. The easiest approach is using Pipecat's development runner which handles all server infrastructure automatically.
+
+See the [complete examples](https://github.com/pipecat-ai/pipecat-examples/tree/main/p2p-webrtc) for full implementations including:
+
+* Development runner setup with automatic web interface
+* Manual signaling server implementation
+* WebRTC client integration
+* ICE server configuration for production deployment
+
+## Event Handlers
+
+SmallWebRTCTransport provides event handlers for client connection lifecycle and application messaging. Register handlers using the `@event_handler` decorator on the transport instance.
+
+### Events Summary
+
+| Event                    | Description                          |
+| ------------------------ | ------------------------------------ |
+| `on_client_connected`    | Client WebRTC connection established |
+| `on_client_disconnected` | Client WebRTC connection closed      |
+| `on_app_message`         | App message received from client     |
+
+### Connection Lifecycle
+
+#### on\_client\_connected
+
+Fired when a client establishes a WebRTC peer connection.
+
+```python theme={null}
+@transport.event_handler("on_client_connected")
+async def on_client_connected(transport, webrtc_connection):
+    print("Client connected")
+```
+
+**Parameters:**
+
+| Parameter           | Type                    | Description                  |
+| ------------------- | ----------------------- | ---------------------------- |
+| `transport`         | `SmallWebRTCTransport`  | The transport instance       |
+| `webrtc_connection` | `SmallWebRTCConnection` | The WebRTC connection object |
+
+#### on\_client\_disconnected
+
+Fired when a client's WebRTC peer connection is closed.
+
+```python theme={null}
+@transport.event_handler("on_client_disconnected")
+async def on_client_disconnected(transport, webrtc_connection):
+    print("Client disconnected")
+```
+
+**Parameters:**
+
+| Parameter           | Type                    | Description                  |
+| ------------------- | ----------------------- | ---------------------------- |
+| `transport`         | `SmallWebRTCTransport`  | The transport instance       |
+| `webrtc_connection` | `SmallWebRTCConnection` | The WebRTC connection object |
+
+### Messaging
+
+#### on\_app\_message
+
+Fired when an application message is received from a client through the WebRTC data channel.
+
+```python theme={null}
+@transport.event_handler("on_app_message")
+async def on_app_message(transport, message, sender):
+    print(f"Message from {sender}: {message}")
+```
+
+**Parameters:**
+
+| Parameter   | Type                   | Description                     |
+| ----------- | ---------------------- | ------------------------------- |
+| `transport` | `SmallWebRTCTransport` | The transport instance          |
+| `message`   | `Any`                  | The message content             |
+| `sender`    | `str`                  | The sender's peer connection ID |
+
+## ICE Servers Configuration
+
+WebRTC uses ICE (Interactive Connectivity Establishment) to find the best network path between two peers. ICE relies on two types of helper servers:
+
+* **STUN** (Session Traversal Utilities for NAT) — Helps a client discover its public IP address and port when it's behind a NAT device. WebRTC uses this information to attempt a direct peer-to-peer connection.
+* **TURN** (Traversal Using Relays around NAT) — A relay fallback used when a direct connection isn't possible due to strict NATs or firewalls. All media traffic is routed through the TURN server in this case.
+
+ICE servers are **optional for local network development** but become important as soon as peers are on different networks.
+
+### When do you need ICE servers?
+
+| Scenario                                         | STUN needed | TURN needed |
+| ------------------------------------------------ | ----------- | ----------- |
+| Both peers on the same local network             | No          | No          |
+| Peers on different networks (Linux)              | Yes         | Usually not |
+| Peers on different networks (macOS / strict NAT) | Yes         | Yes         |
+| Docker on macOS (no `--network=host`)            | Yes         | Yes         |
+| Production deployment                            | Yes         | Recommended |
+
+### Server-side configuration
+
+Pass ICE servers when creating `SmallWebRTCConnection`. You can provide simple URL strings or full `IceServer` objects (an alias for aiortc's `RTCIceServer`):
+
+```python theme={null}
+from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection, IceServer
+
+webrtc_connection = SmallWebRTCConnection(
+    ice_servers=[
+        IceServer(urls=["stun:stun.l.google.com:19302"]),
+        IceServer(
+            urls=["turn:your-turn-server.example.com:3478"],
+            username="your-username",
+            credential="your-password",
+        ),
+    ]
+)
+```
+
+<Note>
+  In production, WebRTC applications must run over HTTPS. Browsers block WebRTC
+  access to microphone and camera on insecure origins.
+</Note>
+
+## Advanced Configuration
+
+### PIPECAT\_SCTP\_MAX\_CHUNK\_SIZE
+
+Controls the maximum SCTP DATA-chunk payload size (in bytes) used by aiortc's data channel. The default is `1100`.
+
+```bash theme={null}
+PIPECAT_SCTP_MAX_CHUNK_SIZE=1100
+```
+
+<Note>
+  This is a process-global setting due to an aiortc limitation — all
+  SmallWebRTC connections in the same process share the same value.
+</Note>
+
+**When to lower it**
+
+Lower this value if the data channel silently stalls on your network. This happens when aiortc's internal default produces UDP datagrams larger than your path's MTU. Each chunk carries roughly 105 bytes of SCTP + DTLS + UDP + IP overhead, so a 1200-byte chunk results in a \~1305-byte datagram. This exceeds the 1280-byte MTU common on:
+
+* IPv6 paths
+* Tailscale overlays
+* Many consumer VPNs
+
+When the datagram is too large the kernel drops it with `EMSGSIZE`. aiortc retransmits at the same size and the channel stalls indefinitely. Setting `PIPECAT_SCTP_MAX_CHUNK_SIZE=1100` produces \~1205-byte datagrams, which fits any path with MTU ≥ 1210.
+
+**When to raise it**
+
+Only raise it if you are on a controlled LAN with MTU 1500 and are sending large data-channel messages where extra fragmentation matters. Values above 1200 are unsafe on most internet paths.
+
+## Additional Resources
+
+* [Events Overview](/api-reference/server/events/overview) - Overview of all events in Pipecat
+* [Pipecat Development Runner's Transport Utilities](/api-reference/server/utilities/runner/transport-utils)
+* [Client SDK Integration](/api-reference/client/js/transports/small-webrtc)

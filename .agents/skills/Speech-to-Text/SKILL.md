@@ -1,0 +1,230 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://docs.pipecat.ai/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Whisper
+
+> Speech-to-text service implementation using locally-downloaded Whisper models
+
+## Overview
+
+`WhisperSTTService` provides offline speech recognition using OpenAI's Whisper models running locally. Supports multiple model sizes and hardware acceleration options including CPU, CUDA, and Apple Silicon (MLX) for privacy-focused transcription without external API calls.
+
+<CardGroup cols={2}>
+  <Card title="Whisper STT API Reference" icon="code" href="https://reference-server.pipecat.ai/en/latest/api/pipecat.services.whisper.stt.html">
+    Pipecat's API methods for Whisper STT integration
+  </Card>
+
+  <Card title="Standard Whisper Example" icon="play" href="https://github.com/pipecat-ai/pipecat/blob/main/examples/transcription/transcription-whisper.py">
+    Complete example with standard Whisper
+  </Card>
+
+  <Card title="Whisper Documentation" icon="book" href="https://github.com/openai/whisper">
+    OpenAI's Whisper research paper and model details
+  </Card>
+
+  <Card title="MLX Whisper Example" icon="microphone" href="https://github.com/pipecat-ai/pipecat/blob/main/examples/transcription/transcription-whisper-mlx.py">
+    Apple Silicon optimized example
+  </Card>
+</CardGroup>
+
+## Installation
+
+Choose your installation based on your hardware:
+
+### Standard Whisper (CPU/CUDA)
+
+```bash theme={null}
+uv add "pipecat-ai[whisper]"
+```
+
+### MLX Whisper (Apple Silicon)
+
+```bash theme={null}
+uv add "pipecat-ai[mlx-whisper]"
+```
+
+## Prerequisites
+
+### Local Model Setup
+
+Before using Whisper STT services, you need:
+
+1. **Model Selection**: Choose appropriate Whisper model size (tiny, base, small, medium, large)
+2. **Hardware Configuration**: Set up CPU, CUDA, or Apple Silicon acceleration
+3. **Storage Space**: Ensure sufficient disk space for model downloads
+
+### Configuration Options
+
+* **Model Size**: Balance between accuracy and performance based on your hardware
+* **Hardware Acceleration**: Configure CUDA for NVIDIA GPUs or MLX for Apple Silicon
+* **Language Support**: Whisper supports 99+ languages out of the box
+
+<Tip>
+  No API keys required - Whisper runs entirely locally for complete privacy.
+</Tip>
+
+## Configuration
+
+### WhisperSTTService
+
+Uses Faster Whisper for efficient local transcription on CPU or CUDA devices.
+
+<ParamField path="model" type="str | Model" default="Model.DISTIL_MEDIUM_EN" deprecated>
+  Whisper model to use. Can be a `Model` enum value or a string. Available
+  models: `TINY`, `BASE`, `SMALL`, `MEDIUM`, `LARGE` (large-v3),
+  `LARGE_V3_TURBO`, `DISTIL_LARGE_V2`, `DISTIL_MEDIUM_EN` (English-only).
+  *Deprecated in v0.0.105. Use `settings=WhisperSTTService.Settings(...)`
+  instead.*
+</ParamField>
+
+<ParamField path="device" type="str" default="auto">
+  Device for inference. Options: `"cpu"`, `"cuda"`, or `"auto"` (auto-detect).
+</ParamField>
+
+<ParamField path="compute_type" type="str" default="default">
+  Compute type for inference. Options include `"default"`, `"int8"`,
+  `"int8_float16"`, `"float16"`, etc.
+</ParamField>
+
+<ParamField path="no_speech_prob" type="float" default="0.4" deprecated>
+  Probability threshold for filtering out non-speech segments. Segments with a
+  no-speech probability above this value are excluded. *Deprecated in v0.0.105.
+  Use `settings=WhisperSTTService.Settings(...)` instead.*
+</ParamField>
+
+<ParamField path="language" type="Language" default="Language.EN" deprecated>
+  Default language for transcription. *Deprecated in v0.0.105. Use
+  `settings=WhisperSTTService.Settings(...)` instead.*
+</ParamField>
+
+<ParamField path="settings" type="WhisperSTTService.Settings" default="None">
+  Runtime-configurable settings for the STT service. See [WhisperSTTService
+  Settings](#whispersttservice-settings) below.
+</ParamField>
+
+### WhisperSTTServiceMLX
+
+Optimized for Apple Silicon using MLX Whisper. Models are loaded on demand.
+
+<ParamField path="model" type="str | MLXModel" default="MLXModel.TINY" deprecated>
+  MLX Whisper model to use. Can be an `MLXModel` enum value or a string.
+  Available models: `TINY`, `MEDIUM`, `LARGE_V3`, `LARGE_V3_TURBO`,
+  `DISTIL_LARGE_V3`, `LARGE_V3_TURBO_Q4` (quantized). *Deprecated in v0.0.105.
+  Use `settings=WhisperSTTServiceMLX.Settings(...)` instead.*
+</ParamField>
+
+<ParamField path="no_speech_prob" type="float" default="0.6" deprecated>
+  Probability threshold for filtering out non-speech segments. *Deprecated in
+  v0.0.105. Use `settings=WhisperSTTServiceMLX.Settings(...)` instead.*
+</ParamField>
+
+<ParamField path="language" type="Language" default="Language.EN" deprecated>
+  Default language for transcription. *Deprecated in v0.0.105. Use
+  `settings=WhisperSTTServiceMLX.Settings(...)` instead.*
+</ParamField>
+
+<ParamField path="temperature" type="float" default="0.0" deprecated>
+  Sampling temperature. Lower values produce more deterministic results.
+  *Deprecated in v0.0.105. Use `settings=WhisperSTTServiceMLX.Settings(...)`
+  instead.*
+</ParamField>
+
+<ParamField path="settings" type="WhisperSTTServiceMLX.Settings" default="None">
+  Runtime-configurable settings for the MLX STT service. See
+  [WhisperSTTServiceMLX Settings](#whispersttservicemlx-settings) below.
+</ParamField>
+
+### WhisperSTTService Settings
+
+Runtime-configurable settings passed via the `settings` constructor argument using `WhisperSTTService.Settings(...)`. These can be updated mid-conversation with `STTUpdateSettingsFrame`. See [Service Settings](/pipecat/fundamentals/service-settings) for details.
+
+| Parameter        | Type              | Default                  | Description                                                               |
+| ---------------- | ----------------- | ------------------------ | ------------------------------------------------------------------------- |
+| `model`          | `str`             | `Model.DISTIL_MEDIUM_EN` | Whisper model to use. *(Inherited from base STT settings.)*               |
+| `language`       | `Language \| str` | `Language.EN`            | Default language for transcription. *(Inherited from base STT settings.)* |
+| `no_speech_prob` | `float`           | `0.4`                    | Probability threshold for filtering out non-speech segments.              |
+
+### WhisperSTTServiceMLX Settings
+
+Runtime-configurable settings passed via the `settings` constructor argument using `WhisperSTTServiceMLX.Settings(...)`. These can be updated mid-conversation with `STTUpdateSettingsFrame`. See [Service Settings](/pipecat/fundamentals/service-settings) for details.
+
+| Parameter        | Type              | Default         | Description                                                               |
+| ---------------- | ----------------- | --------------- | ------------------------------------------------------------------------- |
+| `model`          | `str`             | `MLXModel.TINY` | MLX Whisper model to use. *(Inherited from base STT settings.)*           |
+| `language`       | `Language \| str` | `Language.EN`   | Default language for transcription. *(Inherited from base STT settings.)* |
+| `no_speech_prob` | `float`           | `0.6`           | Probability threshold for filtering out non-speech segments.              |
+| `temperature`    | `float`           | `0.0`           | Sampling temperature. Lower values are more deterministic.                |
+| `engine`         | `str`             | `"mlx"`         | Whisper engine identifier.                                                |
+
+## Usage
+
+### Basic Faster Whisper Setup
+
+```python theme={null}
+from pipecat.services.whisper.stt import WhisperSTTService
+
+stt = WhisperSTTService(
+    settings=WhisperSTTService.Settings(
+        model="base",
+    ),
+)
+```
+
+### With CUDA Acceleration
+
+```python theme={null}
+from pipecat.services.whisper.stt import WhisperSTTService, Model
+
+stt = WhisperSTTService(
+    device="cuda",
+    compute_type="float16",
+    settings=WhisperSTTService.Settings(
+        model=Model.LARGE,
+    ),
+)
+```
+
+### With Custom Language
+
+```python theme={null}
+from pipecat.services.whisper.stt import WhisperSTTService, Model
+from pipecat.transcriptions.language import Language
+
+stt = WhisperSTTService(
+    settings=WhisperSTTService.Settings(
+        model=Model.MEDIUM,
+        language=Language.FR,
+        no_speech_prob=0.5,
+    ),
+)
+```
+
+### MLX Whisper on Apple Silicon
+
+```python theme={null}
+from pipecat.services.whisper.stt import WhisperSTTServiceMLX, MLXModel
+from pipecat.transcriptions.language import Language
+
+stt = WhisperSTTServiceMLX(
+    settings=WhisperSTTServiceMLX.Settings(
+        model=MLXModel.LARGE_V3_TURBO,
+        language=Language.EN,
+        temperature=0.0,
+    ),
+)
+```
+
+<Tip>
+  The `InputParams` / `params=` pattern is deprecated as of v0.0.105. Use
+  `Settings` / `settings=` instead. See the [Service Settings
+  guide](/pipecat/fundamentals/service-settings) for migration details.
+</Tip>
+
+## Notes
+
+* **First run downloads**: If the selected model hasn't been downloaded previously, the first run will download it from the Hugging Face model hub. This may take significant time depending on model size.
+* **Segmented transcription**: Both `WhisperSTTService` and `WhisperSTTServiceMLX` extend `SegmentedSTTService`, meaning they process complete audio segments after VAD detects the user has stopped speaking.
+* **No-speech filtering**: The `no_speech_prob` threshold helps filter out hallucinations. Increase it to be more permissive, decrease it to filter more aggressively.
+* **MLX quantization**: The `LARGE_V3_TURBO_Q4` model provides reduced memory usage with minimal quality loss on Apple Silicon.
+* **Language support**: Whisper supports 99+ languages. Use the `Language` enum for type-safe language selection. The default is `Language.EN` (English). Set `language=None` in settings to enable automatic language detection, which will transcribe whatever language the user speaks.
