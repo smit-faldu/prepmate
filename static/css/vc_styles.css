@@ -919,3 +919,43 @@ canvas#vc-visualizer {
   .vc-panel   { position: static; }
   .stage-tracker { display: none; }
 }
+
+/* ─── TTS Mute Button ─────────────────────────────────────────────────────── */
+.mute-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--text-secondary);
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.mute-btn:hover {
+  border-color: var(--gold-primary);
+  color: var(--gold-light);
+  background: var(--gold-glow);
+  transform: scale(1.08);
+}
+
+.mute-btn.muted {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  background: rgba(239,68,68,0.08);
+}
+
+/* Controls-bar speaking state — dim the label when Marcus has the floor */
+.controls-bar.vc-speaking .controls-label {
+  color: var(--gold-primary);
+}
+
+.controls-bar.vc-speaking .controls-sublabel {
+  color: var(--text-dim);
+  font-style: italic;
+}

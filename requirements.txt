@@ -1,4 +1,4 @@
-pipecat-ai[whisper,local,websocket]
+pipecat-ai[whisper,local,websocket,elevenlabs]
 fastapi
 uvicorn
 python-dotenv

@@ -18,6 +18,12 @@ let sessionId    = null;
 let currentStage = 'intro';
 let renderedRedFlags = new Set();
 
+// ─── TTS State ────────────────────────────────────────────────────────────────
+let isMuted        = false;   // user-toggled mute
+let ttsPlaying     = false;   // true while Marcus is speaking
+let micGated       = false;   // true while mic is disabled waiting for TTS
+let ttsPlayer      = null;    // TtsPlayer instance, created on first connect
+
 // ─── DOM References ───────────────────────────────────────────────────────────
 const micBtn          = document.getElementById('mic-btn');
 const micIcon         = document.getElementById('mic-icon');
@@ -92,6 +98,110 @@ const STAGE_META = {
   },
 };
 
+// ─── TtsPlayer ────────────────────────────────────────────────────────────────
+// Decodes incoming MP3 binary frames and plays them via Web Audio API.
+// Turn-based: queues chunks, plays sequentially, signals done via onFinished().
+// ──────────────────────────────────────────────────────────────────────────────
+class TtsPlayer {
+  constructor(ctx) {
+    this._ctx        = ctx;       // shared AudioContext
+    this._chunks     = [];        // incoming MP3 byte arrays
+    this._mp3Buffer  = [];        // accumulating raw MP3 bytes
+    this._source     = null;      // currently playing AudioBufferSourceNode
+    this._playing    = false;
+    this._done       = false;     // server sent tts_done
+    this._gainNode   = ctx.createGain();
+    this._gainNode.connect(ctx.destination);
+  }
+
+  /** Feed an MP3 chunk (ArrayBuffer) from the server */
+  feedChunk(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    this._mp3Buffer.push(...bytes);
+    if (!this._playing) this._tryFlush();
+  }
+
+  /** Called when the server sends tts_done — signals no more chunks. */
+  markDone() {
+    this._done = true;
+    if (!this._playing) this._tryFlush();
+  }
+
+  /** Decode & play everything accumulated so far, then call _onPlaybackEnd. */
+  _tryFlush() {
+    if (this._mp3Buffer.length === 0) {
+      if (this._done) this._onPlaybackEnd();
+      return;
+    }
+    const allBytes = new Uint8Array(this._mp3Buffer);
+    this._mp3Buffer = [];
+    this._playing = true;
+
+    this._ctx.decodeAudioData(
+      allBytes.buffer.slice(0),
+      (audioBuffer) => {
+        if (isMuted) {
+          // Muted: skip playback but honour timing so tts_done still fires
+          const durationMs = Math.round(audioBuffer.duration * 1000);
+          setTimeout(() => {
+            this._playing = false;
+            this._tryFlush();
+          }, durationMs);
+          return;
+        }
+
+        const source = this._ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(this._gainNode);
+        source.onended = () => {
+          this._playing = false;
+          this._source  = null;
+          this._tryFlush();
+        };
+        this._source = source;
+        source.start();
+      },
+      (err) => {
+        console.warn('[TTS] decodeAudioData error, skipping chunk:', err);
+        this._playing = false;
+        this._tryFlush();
+      }
+    );
+  }
+
+  /** Invoked after the final chunk finishes playing. */
+  _onPlaybackEnd() {
+    ttsPlaying = false;
+    micGated   = false;
+    console.debug('[TTS] Playback complete — mic re-enabled');
+    // Re-enable mic UI feedback
+    if (isRecording) {
+      controlsLabel.textContent    = 'Pitching...';
+      controlsSubLabel.textContent = 'Speak naturally, pause to submit';
+      updateStatus('connected', 'Your turn — speak now');
+    }
+  }
+
+  /** Mute/unmute the gain without stopping playback. */
+  setMuted(muted) {
+    this._gainNode.gain.setTargetAtTime(muted ? 0 : 1, this._ctx.currentTime, 0.02);
+  }
+
+  /** Hard stop (e.g. session end). */
+  stop() {
+    if (this._source) {
+      try { this._source.stop(); } catch (_) {}
+      this._source = null;
+    }
+    this._mp3Buffer = [];
+    this._chunks    = [];
+    this._playing   = false;
+    this._done      = false;
+    ttsPlaying      = false;
+    micGated        = false;
+  }
+}
+
 // ─── Initialise Visualizer ───────────────────────────────────────────────────
 drawIdleWave();
 
@@ -125,6 +235,7 @@ async function startPitch() {
     const wsUrl = `${protocol}//${window.location.host}/ws/vc?session_id=${sessionId}`;
 
     ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';   // receive MP3 chunks as ArrayBuffer
 
     ws.onopen = async () => {
       try {
@@ -140,6 +251,10 @@ async function startPitch() {
         audioContext = new (window.AudioContext || window.webkitAudioContext)({
           sampleRate: 16000,
         });
+
+        // Shared AudioContext is also used by TtsPlayer
+        ttsPlayer = new TtsPlayer(audioContext);
+        ttsPlayer.setMuted(isMuted);
 
         const source = audioContext.createMediaStreamSource(mediaStream);
 
@@ -158,7 +273,8 @@ async function startPitch() {
         source.connect(processor);
 
         processor.port.onmessage = (ev) => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
+          // Only send audio when mic is not gated (i.e., Marcus is not speaking)
+          if (ws && ws.readyState === WebSocket.OPEN && !micGated) {
             ws.send(ev.data);
           }
         };
@@ -183,6 +299,12 @@ async function startPitch() {
     };
 
     ws.onmessage = (ev) => {
+      // Binary frame = MP3 audio chunk from ElevenLabs TTS
+      if (ev.data instanceof ArrayBuffer) {
+        if (ttsPlayer) ttsPlayer.feedChunk(ev.data);
+        return;
+      }
+      // Text frame = JSON control/data message
       try {
         const data = JSON.parse(ev.data);
         handleServerMessage(data);
@@ -200,8 +322,11 @@ async function startPitch() {
   }
 }
 
+
 function stopPitch() {
   isRecording = false;
+  micGated    = false;
+  ttsPlaying  = false;
   micBtn.classList.remove('recording');
   micBtn.setAttribute('aria-pressed', 'false');
   micBtn.setAttribute('aria-label', 'Start recording microphone');
@@ -210,6 +335,7 @@ function stopPitch() {
   controlsSubLabel.textContent = 'Click mic & speak clearly';
   liveIndicator.classList.remove('active');
 
+  if (ttsPlayer) { ttsPlayer.stop(); ttsPlayer = null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
   if (processor)   { processor.port.close(); processor.disconnect(); processor = null; }
   if (audioContext) { audioContext.close(); audioContext = null; }
@@ -225,6 +351,7 @@ function stopPitch() {
   vcThinking.classList.remove('active');
   updateStatus('disconnected', 'Disconnected');
 }
+
 
 // ─── Server Message Dispatcher ────────────────────────────────────────────────
 function handleServerMessage(data) {
@@ -249,9 +376,29 @@ function handleServerMessage(data) {
       handleVCResponse(data);
       break;
 
+    case 'tts_done':
+      // Server finished sending all TTS audio for this turn.
+      // Let TtsPlayer handle the actual playback-end callback;
+      // just mark the stream as complete so it can flush its buffer.
+      if (ttsPlayer) ttsPlayer.markDone();
+      else {
+        // TTS was disabled server-side — re-enable mic immediately
+        micGated   = false;
+        ttsPlaying = false;
+        if (isRecording) {
+          controlsLabel.textContent    = 'Pitching...';
+          controlsSubLabel.textContent = 'Speak naturally, pause to submit';
+          updateStatus('connected', 'Your turn — speak now');
+        }
+      }
+      break;
+
     case 'error':
       console.error('Server error:', data.message);
       appendSystemMessage(`⚠ Error: ${data.message}`);
+      // On error, always re-enable mic so the session isn't stuck
+      micGated   = false;
+      ttsPlaying = false;
       break;
   }
 }
@@ -284,10 +431,16 @@ function handleThinking(founderText) {
   vcThinking.classList.add('active');
   updateStatus('thinking', 'Marcus is thinking...');
   setVCMood('thinking');
+  // Gate the mic — Marcus has the floor now (turn-based)
+  micGated   = true;
+  ttsPlaying = true;
+  controlsLabel.textContent    = 'Marcus is speaking...';
+  controlsSubLabel.textContent = 'Wait for Marcus to finish';
   // Reset streaming bubble ref — a fresh one is created on the first token
   _streamingVCBubble = null;
   _streamingVCText = '';
 }
+
 
 // ─── Streaming VC reply (token-by-token) ───────────────────────────────────────
 // As soon as the first token arrives we create the message bubble and start
@@ -644,3 +797,22 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+// ─── Mute Toggle ─────────────────────────────────────────────────────────────
+function toggleMute() {
+  isMuted = !isMuted;
+  const muteBtn  = document.getElementById('mute-btn');
+  const muteIcon = document.getElementById('mute-icon');
+  if (isMuted) {
+    muteIcon.textContent = '🔇';
+    muteBtn.classList.add('muted');
+    muteBtn.setAttribute('aria-label', 'Unmute voice');
+  } else {
+    muteIcon.textContent = '🔊';
+    muteBtn.classList.remove('muted');
+    muteBtn.setAttribute('aria-label', 'Mute voice');
+  }
+  if (ttsPlayer) ttsPlayer.setMuted(isMuted);
+  console.debug(`[TTS] ${isMuted ? 'Muted' : 'Unmuted'}`);
+}
+window.toggleMute = toggleMute;

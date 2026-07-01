@@ -1,6 +1,8 @@
 import asyncio
+import io
 import json
 import os
+import re
 import sys
 import time
 from dotenv import load_dotenv
@@ -34,6 +36,9 @@ from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPI
 
 # Load configuration from .env
 load_dotenv(override=True)
+
+# ── TTS feature flag ──────────────────────────────────────────────────────────
+_TTS_ENABLED = os.getenv("TTS_ENABLED", "true").lower() == "true"
 
 # Configure logger
 logger.remove()
@@ -88,6 +93,126 @@ def _resolve_whisper_config() -> dict:
 
 # Mount static files (CSS, JS)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# =============================================================================
+# TTSEngine — ElevenLabs WebSocket streaming TTS
+# =============================================================================
+# Feeds LLM token chunks (accumulated into natural sentences) to ElevenLabs and
+# yields raw 16-bit PCM audio bytes as they stream back. Turn-based: the caller
+# awaits the full audio stream before re-enabling the mic.
+# =============================================================================
+
+# Regex to detect sentence boundaries (., !, ?) for natural chunking
+_SENTENCE_END = re.compile(r'(?<=[.!?])\s+')
+
+
+class TTSEngine:
+    """
+    Async wrapper around ElevenLabs HTTP streaming TTS.
+
+    Usage:
+        engine = TTSEngine()
+        async for pcm_chunk in engine.synthesize(text):
+            await websocket.send_bytes(pcm_chunk)
+    """
+
+    def __init__(self):
+        self._api_key   = os.getenv("ELEVENLABS_API_KEY", "")
+        self._voice_id  = os.getenv("ELEVENLABS_VOICE_ID", "pNInz6obpgDQGcFmaJgB")
+        self._model     = os.getenv("ELEVENLABS_MODEL", "eleven_turbo_v2_5")
+        self._enabled   = _TTS_ENABLED and bool(self._api_key) and self._api_key != "your_elevenlabs_api_key_here"
+
+        if not self._enabled:
+            logger.warning("[TTS] Disabled — set ELEVENLABS_API_KEY and TTS_ENABLED=true in .env")
+        else:
+            logger.info(f"[TTS] ElevenLabs ready. voice={self._voice_id!r} model={self._model!r}")
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    async def synthesize(self, text: str):
+        """
+        Synthesize *text* via ElevenLabs streaming API.
+        Yields raw PCM audio bytes (mp3 chunks from ElevenLabs).
+        Call once per complete VC response sentence/paragraph.
+        """
+        if not self._enabled or not text.strip():
+            return
+
+        import aiohttp
+
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{self._voice_id}/stream"
+        headers = {
+            "xi-api-key": self._api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+        }
+        payload = {
+            "text": text,
+            "model_id": self._model,
+            "voice_settings": {
+                "stability": 0.45,
+                "similarity_boost": 0.85,
+                "style": 0.30,
+                "use_speaker_boost": True,
+            },
+            "output_format": "mp3_44100_128",
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        logger.error(f"[TTS] ElevenLabs error {resp.status}: {body[:200]}")
+                        return
+                    async for chunk in resp.content.iter_chunked(4096):
+                        if chunk:
+                            yield chunk
+        except Exception as e:
+            logger.error(f"[TTS] Synthesis error: {e}")
+
+    async def synthesize_full_response(self, full_text: str, websocket: WebSocket):
+        """
+        Synthesize the complete VC response and stream audio binary frames to
+        the browser. Sends a JSON 'tts_done' event when finished so the client
+        knows to re-enable the mic.
+        """
+        if not self._enabled:
+            # No TTS — tell client to re-enable mic immediately
+            try:
+                await websocket.send_text(json.dumps({"type": "tts_done"}))
+            except Exception:
+                pass
+            return
+
+        # Strip any internal tags before synthesizing
+        clean = full_text.replace("<END_PITCH>", "").strip()
+        if not clean:
+            await websocket.send_text(json.dumps({"type": "tts_done"}))
+            return
+
+        logger.info(f"[TTS] Synthesizing {len(clean)} chars for Marcus Reid...")
+        t0 = time.monotonic()
+        chunk_count = 0
+
+        try:
+            async for audio_chunk in self.synthesize(clean):
+                await websocket.send_bytes(audio_chunk)
+                chunk_count += 1
+        except Exception as e:
+            logger.error(f"[TTS] Stream send error: {e}")
+
+        elapsed = time.monotonic() - t0
+        logger.info(f"[TTS] Done — {chunk_count} chunks in {elapsed:.2f}s")
+
+        # Signal client: TTS finished, mic can open
+        try:
+            await websocket.send_text(json.dumps({"type": "tts_done"}))
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -311,21 +436,22 @@ async def websocket_endpoint(websocket: WebSocket):
 class VCBroadcaster(FrameProcessor):
     """
     Replaces TranscriptionBroadcaster for the /ws/vc endpoint.
-    On each final transcript:
-      1. Sends 'vc_thinking' status to the browser
-      2. Streams the VC's reply via run_turn_streaming() — tokens are
-         forwarded to the browser as 'vc_token' messages AS THEY ARRIVE,
-         so the user sees/hears the response start within ~1s instead of
-         waiting for the full turn (analyst + persona) to complete.
-      3. Sends a final 'vc_response' message with full metadata once the
-         turn (including the concurrently-running analyst) completes.
-    VAD events and interim transcripts are still forwarded for UI feedback.
+
+    Turn-based flow (investor does NOT get interrupted):
+      1. Sends 'vc_thinking' to browser → client gates mic
+      2. Streams LLM tokens → forwards as 'vc_token' for live text display
+      3. On 'final' event: sends 'vc_response' JSON, THEN synthesizes the full
+         VC reply via ElevenLabs and streams audio as binary WebSocket frames.
+      4. Sends 'tts_done' → browser re-enables mic for next founder turn.
+
+    VAD / interim events are still forwarded for UI feedback.
     """
 
-    def __init__(self, websocket: WebSocket, session_id: str):
+    def __init__(self, websocket: WebSocket, session_id: str, tts_engine: "TTSEngine"):
         super().__init__()
-        self._websocket = websocket
+        self._websocket  = websocket
         self._session_id = session_id
+        self._tts        = tts_engine
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
@@ -337,6 +463,8 @@ class VCBroadcaster(FrameProcessor):
             if text:
                 logger.info(f"[VC] Founder said: {text!r}")
                 turn_start = time.monotonic()
+
+                # ── 1. Tell browser Marcus is thinking (gate the mic) ────────
                 try:
                     await self._websocket.send_text(json.dumps({
                         "type": "vc_thinking",
@@ -345,7 +473,11 @@ class VCBroadcaster(FrameProcessor):
                 except Exception:
                     pass
 
+                # ── 2. Stream LLM tokens (text appears word-by-word) ─────────
                 first_token_at = None
+                final_vc_text  = ""
+                final_event    = None
+
                 try:
                     async for event in run_turn_streaming(self._session_id, text):
                         if event["type"] == "token":
@@ -362,27 +494,50 @@ class VCBroadcaster(FrameProcessor):
                             except Exception as e:
                                 logger.warning(f"[VCBroadcaster] Token send error: {e}")
                         elif event["type"] == "final":
-                            total_s = time.monotonic() - turn_start
-                            logger.info(
-                                f"[VC] Turn complete in {total_s:.2f}s | "
-                                f"Stage={event['stage']} | "
-                                f"Exchange={event['exchange_count']} | "
-                                f"is_out={event['is_out']}"
-                            )
-                            payload = json.dumps({
-                                "type": "vc_response",
-                                "founder_text": text,
-                                "vc_text": event["vc_response"],
-                                "stage": event["stage"],
-                                "exchange_count": event["exchange_count"],
-                                "pitch_metrics": event["pitch_metrics"],
-                                "is_out": event["is_out"],
-                                "pitch_ended": event["pitch_ended"],
-                                "latency_ms": round(total_s * 1000),
-                            })
+                            final_event   = event
+                            final_vc_text = event.get("vc_response", "")
                 except Exception as e:
                     logger.error(f"[VC] Agent error: {e}")
-                    payload = json.dumps({"type": "error", "message": str(e)})
+                    try:
+                        await self._websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
+                    except Exception:
+                        pass
+                    # Still send tts_done so client can recover
+                    try:
+                        await self._websocket.send_text(json.dumps({"type": "tts_done"}))
+                    except Exception:
+                        pass
+                    await self.push_frame(frame, direction)
+                    return
+
+                # ── 3. Send full metadata response ───────────────────────────
+                if final_event:
+                    total_s = time.monotonic() - turn_start
+                    logger.info(
+                        f"[VC] Turn complete in {total_s:.2f}s | "
+                        f"Stage={final_event['stage']} | "
+                        f"Exchange={final_event['exchange_count']} | "
+                        f"is_out={final_event['is_out']}"
+                    )
+                    try:
+                        await self._websocket.send_text(json.dumps({
+                            "type": "vc_response",
+                            "founder_text": text,
+                            "vc_text": final_vc_text,
+                            "stage": final_event["stage"],
+                            "exchange_count": final_event["exchange_count"],
+                            "pitch_metrics": final_event["pitch_metrics"],
+                            "is_out": final_event["is_out"],
+                            "pitch_ended": final_event["pitch_ended"],
+                            "latency_ms": round(total_s * 1000),
+                        }))
+                    except Exception as e:
+                        logger.warning(f"[VCBroadcaster] vc_response send error: {e}")
+
+                # ── 4. Stream TTS audio, then signal mic re-enable ───────────
+                # synthesize_full_response() sends binary MP3 chunks then
+                # sends {type: 'tts_done'} — turn-based, no interrupts.
+                await self._tts.synthesize_full_response(final_vc_text, self._websocket)
 
         elif isinstance(frame, InterimTranscriptionFrame):
             payload = json.dumps({"type": "interim", "text": frame.text})
@@ -405,12 +560,15 @@ class VCBroadcaster(FrameProcessor):
 # ---------------------------------------------------------------------------
 @app.websocket("/ws/vc")
 async def vc_websocket_endpoint(websocket: WebSocket):
-    """WebSocket for the VC pitch mode: VAD+STT → LangGraph VC agent → JSON response."""
+    """WebSocket for the VC pitch mode: VAD+STT → LangGraph VC agent → TTS audio."""
     await websocket.accept()
 
     # Client sends session_id as query param
     session_id = websocket.query_params.get("session_id", new_session())
     logger.info(f"[VC] WebSocket connected. session_id={session_id}")
+
+    # One TTSEngine per connection (stateless, so sharing is fine too)
+    tts_engine = TTSEngine()
 
     serializer = WhisperLiveSerializer()
     transport = FastAPIWebsocketTransport(
@@ -418,7 +576,7 @@ async def vc_websocket_endpoint(websocket: WebSocket):
         params=FastAPIWebsocketParams(
             audio_in_enabled=True,
             audio_in_sample_rate=16000,
-            audio_out_enabled=False,
+            audio_out_enabled=False,   # We send audio manually as raw binary frames
             serializer=serializer,
         )
     )
@@ -446,8 +604,8 @@ async def vc_websocket_endpoint(websocket: WebSocket):
     )
     vad_processor = VADProcessor(vad_analyzer=vad_analyzer)
 
-    # VCBroadcaster routes transcripts through the LangGraph multi-agent system
-    vc_broadcaster = VCBroadcaster(websocket, session_id)
+    # VCBroadcaster: transcripts → LangGraph → token stream → TTS audio
+    vc_broadcaster = VCBroadcaster(websocket, session_id, tts_engine)
 
     pipeline = Pipeline([
         transport.input(),
