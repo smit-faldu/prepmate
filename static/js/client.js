@@ -8,7 +8,6 @@ let isRecording = false;
 // DOM Elements
 const recordBtn = document.getElementById('record-btn');
 const btnText = document.getElementById('btn-text');
-const modelSelect = document.getElementById('model-select');
 const clearBtn = document.getElementById('clear-btn');
 const statusIndicator = document.getElementById('status-indicator');
 const statusText = document.getElementById('status-text');
@@ -19,6 +18,9 @@ const interimContainer = document.getElementById('interim-container');
 const interimText = document.getElementById('interim-text');
 const canvas = document.getElementById('visualizer');
 const canvasCtx = canvas.getContext('2d');
+const streamingLabel = document.getElementById('streaming-label');
+const streamPulse = document.getElementById('stream-pulse');
+const whisperModelName = document.getElementById('whisper-model-name');
 
 // Sound visualization variables
 let audioAnalyser = null;
@@ -31,12 +33,12 @@ initVisualizer();
 // Add Event Listeners
 recordBtn.addEventListener('click', toggleRecording);
 clearBtn.addEventListener('click', clearTranscripts);
-modelSelect.addEventListener('change', () => {
-    if (isRecording) {
-        // Restart recording to apply new model size
-        stopRecording();
-        startRecording();
-    }
+
+// Fetch server-side Whisper model name to show in UI
+fetch('/api/stt-info').then(r => r.json()).then(d => {
+    if (whisperModelName && d.model) whisperModelName.textContent = d.model;
+}).catch(() => {
+    if (whisperModelName) whisperModelName.textContent = 'unknown';
 });
 
 // Sound Visualizer Setup (Drawing loop)
@@ -126,9 +128,8 @@ function toggleRecording() {
 // Start recording and WebSocket stream
 async function startRecording() {
     try {
-        const model = modelSelect.value;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws?model=${model}`;
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
         
         updateStatus('connecting', 'Connecting...');
         
@@ -263,10 +264,14 @@ function convertFloat32ToInt16(buffer) {
 // Handle messages received from the Python pipeline server
 function handleServerMessage(data) {
     if (data.type === 'interim') {
-        const text = data.text.strip ? data.text.strip() : data.text;
+        const text = data.text.trim ? data.text.trim() : data.text;
         if (text) {
             interimContainer.style.display = 'flex';
-            interimText.textContent = text;
+            // Show text with blinking cursor to signal live streaming
+            interimText.innerHTML = `${escapeHtml(text)}<span class="stream-cursor">&#9611;</span>`;
+            // Update streaming badge
+            if (streamingLabel) streamingLabel.textContent = 'Streaming…';
+            if (streamPulse) streamPulse.classList.add('active');
         } else {
             interimContainer.style.display = 'none';
         }
@@ -276,14 +281,26 @@ function handleServerMessage(data) {
             addTranscriptItem(text);
         }
         interimContainer.style.display = 'none';
-        interimText.textContent = '';
+        interimText.innerHTML = '';
+        if (streamingLabel) streamingLabel.textContent = 'Processing…';
+        if (streamPulse) streamPulse.classList.remove('active');
     } else if (data.type === 'status') {
         if (data.status === 'speaking') {
             updateStatus('listening', 'User Speaking...');
+            if (streamingLabel) streamingLabel.textContent = 'Listening…';
         } else if (data.status === 'silence') {
-            updateStatus('listening', 'Listening');
+            updateStatus('listening', 'Transcribing...');
+            if (streamingLabel) streamingLabel.textContent = 'Idle';
+            if (streamPulse) streamPulse.classList.remove('active');
         }
     }
+}
+
+// Escape HTML for safe text injection
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
 }
 
 // Add a final transcription to the transcript display area

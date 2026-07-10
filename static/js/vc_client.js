@@ -405,18 +405,28 @@ function handleServerMessage(data) {
 
 function handleInterim(text) {
   if (text && text.trim()) {
-    interimContent.textContent = `"${text}"`;
+    // Add blinking cursor to signal Whisper is actively streaming
+    interimContent.innerHTML = `"${escapeHtmlVC(text.trim())}<span class="interim-cursor">&#9611;</span>"`;
     interimContent.classList.add('active');
   }
+}
+
+// Safe HTML escaping for interim text injection
+function escapeHtmlVC(text) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(text));
+  return d.innerHTML;
 }
 
 function handleVADStatus(status) {
   if (status === 'speaking') {
     updateStatus('speaking', 'Listening...');
     vcThinking.classList.remove('active');
+    interimContent.innerHTML = '<em style="opacity:0.6">Whisper is listening…</em>';
+    interimContent.classList.add('active');
   } else if (status === 'silence') {
-    updateStatus('connected', 'Processing...');
-    interimContent.textContent = 'Processing your words...';
+    updateStatus('connected', 'Finalizing...');
+    interimContent.innerHTML = '<em style="opacity:0.6">Finalizing transcript…</em>';
     interimContent.classList.remove('active');
   }
 }

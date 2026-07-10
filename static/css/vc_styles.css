@@ -959,3 +959,18 @@ canvas#vc-visualizer {
   color: var(--text-dim);
   font-style: italic;
 }
+
+/* ── Streaming Whisper cursor \u2014 blinking block in interim bar ─────────────── */
+.interim-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--gold-primary);
+  animation: blink-cursor-vc 0.75s step-end infinite;
+  font-size: 0.85em;
+  vertical-align: baseline;
+}
+@keyframes blink-cursor-vc {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+

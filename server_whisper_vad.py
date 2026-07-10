@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+import numpy as np
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -31,7 +32,6 @@ from pipecat.workers.runner import WorkerRunner
 from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.serializers.base_serializer import FrameSerializer
-from pipecat.services.whisper.stt import WhisperSTTService
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
 
 # Load configuration from .env
@@ -90,6 +90,193 @@ def _resolve_whisper_config() -> dict:
         f"| language={'auto-detect' if language is None else language!r}"
     )
     return {"device": device, "model": model, "compute_type": compute_type, "language": language}
+
+
+# =============================================================================
+# StreamingWhisperProcessor — Real-time chunked Whisper inference
+# =============================================================================
+# Runs faster-whisper on a rolling audio buffer while the user is speaking,
+# emitting InterimTranscriptionFrames every CHUNK_INTERVAL_SECS seconds.
+# When VAD signals silence, runs a final accurate inference on the full buffer
+# and emits a TranscriptionFrame. Replaces WhisperSTTService in the pipeline.
+# =============================================================================
+
+# Singleton Whisper model — shared across all WebSocket connections so the
+# model is only loaded from disk once at server start-up.
+_WHISPER_MODEL = None
+_WHISPER_MODEL_LOCK = asyncio.Lock()
+
+async def _get_whisper_model(wcfg: dict):
+    """Lazily load faster-whisper WhisperModel as a singleton."""
+    global _WHISPER_MODEL
+    async with _WHISPER_MODEL_LOCK:
+        if _WHISPER_MODEL is None:
+            from faster_whisper import WhisperModel
+            logger.info(
+                f"[Whisper] Loading model '{wcfg['model']}' "
+                f"device={wcfg['device']} compute_type={wcfg['compute_type']} ..."
+            )
+            _WHISPER_MODEL = WhisperModel(
+                wcfg["model"],
+                device=wcfg["device"],
+                compute_type=wcfg["compute_type"],
+            )
+            logger.info("[Whisper] Model ready.")
+    return _WHISPER_MODEL
+
+
+class StreamingWhisperProcessor(FrameProcessor):
+    """
+    Custom Pipecat FrameProcessor that provides streaming-like transcription
+    from local faster-whisper by running chunked inference on a rolling buffer.
+
+    Behaviour:
+      • On VADUserStartedSpeakingFrame  → reset buffer, start interim loop
+      • On InputAudioRawFrame           → append PCM bytes to buffer
+      • Every CHUNK_INTERVAL_SECS       → transcribe current buffer, emit
+                                          InterimTranscriptionFrame if text changed
+      • On VADUserStoppedSpeakingFrame  → cancel interim loop, final transcribe,
+                                          emit TranscriptionFrame
+      All frames are still passed downstream unchanged.
+    """
+
+    # How often (seconds) to run Whisper on the accumulated buffer mid-speech.
+    # 1.5s balances latency vs. token accuracy. Lower = more frequent but less
+    # accurate interim results (Whisper needs context to decode properly).
+    CHUNK_INTERVAL_SECS: float = 1.5
+    SAMPLE_RATE: int = 16_000
+
+    def __init__(self, whisper_model, language: str | None = None):
+        super().__init__()
+        self._model    = whisper_model
+        self._language = language
+
+        # Audio accumulation buffer (raw Int16 PCM bytes from the browser)
+        self._buffer: bytearray = bytearray()
+        self._speaking: bool    = False
+        self._last_interim: str = ""
+
+        # Background task that fires interim transcriptions
+        self._interim_task: asyncio.Task | None = None
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _transcribe_buffer(self, audio_bytes: bytes) -> str:
+        """
+        Run faster-whisper inference on raw Int16 PCM bytes.
+        Returns the concatenated transcript text (empty string on no speech).
+        """
+        if len(audio_bytes) < self.SAMPLE_RATE * 2 * 0.3:  # < 0.3 s of audio
+            return ""
+
+        # Convert Int16 PCM → float32 normalised [-1, 1] (Whisper format)
+        pcm_i16 = np.frombuffer(audio_bytes, dtype=np.int16)
+        audio_f32 = pcm_i16.astype(np.float32) / 32768.0
+
+        try:
+            segments, _ = self._model.transcribe(
+                audio_f32,
+                language=self._language,
+                beam_size=5,
+                vad_filter=True,           # built-in Silero filter inside Whisper
+                vad_parameters=dict(
+                    min_silence_duration_ms=300,
+                    threshold=0.5,
+                ),
+                no_speech_threshold=0.6,   # drop silence hallucinations
+                condition_on_previous_text=True,
+            )
+            text = " ".join(seg.text.strip() for seg in segments).strip()
+            return text
+        except Exception as e:
+            logger.warning(f"[Whisper] Transcription error: {e}")
+            return ""
+
+    async def _run_transcribe(self, audio_bytes: bytes) -> str:
+        """Run blocking Whisper inference in a thread pool to avoid blocking the event loop."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._transcribe_buffer, audio_bytes)
+
+    async def _interim_loop(self):
+        """
+        Background coroutine: every CHUNK_INTERVAL_SECS, transcribe the current
+        buffer and emit an InterimTranscriptionFrame if the text changed.
+        Cancelled cleanly by VADUserStoppedSpeakingFrame.
+        """
+        try:
+            while True:
+                await asyncio.sleep(self.CHUNK_INTERVAL_SECS)
+
+                snapshot = bytes(self._buffer)  # copy to avoid race
+                if not snapshot:
+                    continue
+
+                text = await self._run_transcribe(snapshot)
+
+                if text and text != self._last_interim:
+                    self._last_interim = text
+                    logger.debug(f"[Whisper] ⟳ Interim: {text!r}")
+                    frame = InterimTranscriptionFrame(
+                        text=text, user_id="", timestamp=""
+                    )
+                    await self.push_frame(frame)
+        except asyncio.CancelledError:
+            pass  # normal shutdown
+
+    # ── FrameProcessor interface ──────────────────────────────────────────────
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, VADUserStartedSpeakingFrame):
+            # ── Speech start: reset state and kick off interim loop ────────
+            self._buffer.clear()
+            self._last_interim = ""
+            self._speaking = True
+
+            if self._interim_task and not self._interim_task.done():
+                self._interim_task.cancel()
+            self._interim_task = asyncio.create_task(self._interim_loop())
+            logger.debug("[Whisper] 🎤 Speech start — interim loop running")
+
+        elif isinstance(frame, InputAudioRawFrame) and self._speaking:
+            # ── Accumulate audio while user is speaking ───────────────────
+            self._buffer.extend(frame.audio)
+
+        elif isinstance(frame, VADUserStoppedSpeakingFrame):
+            # ── Speech end: cancel interim loop, run final inference ──────
+            self._speaking = False
+
+            if self._interim_task and not self._interim_task.done():
+                self._interim_task.cancel()
+                self._interim_task = None
+
+            final_audio = bytes(self._buffer)
+            self._buffer.clear()
+            self._last_interim = ""
+
+            if final_audio:
+                logger.debug("[Whisper] 🔇 Speech end — running final transcription")
+                t0   = time.monotonic()
+                text = await self._run_transcribe(final_audio)
+                elapsed_ms = (time.monotonic() - t0) * 1000
+
+                if text:
+                    logger.info(
+                        f"[Whisper] ✅ Final ({elapsed_ms:.0f}ms): {text!r}"
+                    )
+                    final_frame = TranscriptionFrame(
+                        text=text, user_id="", timestamp=""
+                    )
+                    # Push final BEFORE passing the VAD stop frame downstream
+                    # so broadcasters receive transcript first
+                    await self.push_frame(final_frame)
+                else:
+                    logger.debug(f"[Whisper] ⚠ No speech detected ({elapsed_ms:.0f}ms)")
+
+        # Always pass every frame downstream unchanged
+        await self.push_frame(frame, direction)
+
 
 # Mount static files (CSS, JS)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -339,6 +526,21 @@ async def get_vc():
         return HTMLResponse(content=f.read())
 
 
+# REST endpoint: return current STT engine info (for frontend display)
+@app.get("/api/stt-info")
+async def stt_info():
+    """Returns the Whisper model config so the frontend can display it."""
+    wcfg = _resolve_whisper_config()
+    return JSONResponse({
+        "engine": "local-whisper",
+        "model": wcfg["model"],
+        "device": wcfg["device"],
+        "compute_type": wcfg["compute_type"],
+        "language": wcfg["language"] or "auto",
+        "streaming": True,
+        "chunk_interval_secs": StreamingWhisperProcessor.CHUNK_INTERVAL_SECS,
+    })
+
 # REST endpoint: create a new VC pitch session
 @app.post("/api/vc/session")
 async def create_vc_session():
@@ -373,20 +575,12 @@ async def websocket_endpoint(websocket: WebSocket):
     # Resolve device / compute_type / language from env (auto-selects best defaults)
     wcfg = _resolve_whisper_config()
 
-    # Initialize Whisper STT Service
-    stt_service = WhisperSTTService(
-        device=wcfg["device"],
-        compute_type=wcfg["compute_type"],
-        settings=WhisperSTTService.Settings(
-            model=wcfg["model"],
-            language=wcfg["language"],  # None = multilingual auto-detect
-            no_speech_prob=0.6,          # Filter silence/noise hallucinations
-        )
-    )
+    # Load shared Whisper model (singleton — loaded once, reused across connections)
+    whisper_model = await _get_whisper_model(wcfg)
 
     # Initialize VAD Processor with Silero analyzer
     # stop_secs: how long to wait after silence before declaring end-of-turn
-    # Default is 0.2s — we keep it low to minimize pause before transcription
+    # Default is 0.3s — we keep it low to minimize pause before final transcription
     vad_stop_secs = float(os.getenv("VAD_STOP_SECS", "0.3"))
     vad_analyzer = SileroVADAnalyzer(
         params=VADParams(
@@ -396,28 +590,37 @@ async def websocket_endpoint(websocket: WebSocket):
             min_volume=0.6,           # Min audio volume to count as speech
         )
     )
-    logger.info(f"VAD stop_secs={vad_stop_secs}s | model={wcfg['model']} | device={wcfg['device']} | compute_type={wcfg['compute_type']}")
+    logger.info(
+        f"VAD stop_secs={vad_stop_secs}s | Streaming Whisper model={wcfg['model']} "
+        f"| device={wcfg['device']} | compute_type={wcfg['compute_type']} "
+        f"| interim_interval={StreamingWhisperProcessor.CHUNK_INTERVAL_SECS}s"
+    )
     vad_processor = VADProcessor(vad_analyzer=vad_analyzer)
+
+    # StreamingWhisperProcessor: runs Whisper on rolling buffer mid-speech
+    # (emits InterimTranscriptionFrames) and final accurate pass on silence.
+    streaming_stt = StreamingWhisperProcessor(
+        whisper_model=whisper_model,
+        language=wcfg["language"],
+    )
 
     # Broadcaster: sends TranscriptionFrame & VAD events directly over WebSocket
     # (the output transport's write_transport_frame() is a no-op for these types)
     broadcaster = TranscriptionBroadcaster(websocket)
 
     # Assemble the Pipecat pipeline:
-    # WebSocket input -> VAD -> Whisper STT -> Broadcaster -> WebSocket output
+    # WebSocket input -> VAD -> StreamingWhisper -> Broadcaster -> WebSocket output
     pipeline = Pipeline([
         transport.input(),
         vad_processor,
-        stt_service,
+        streaming_stt,
         broadcaster,
         transport.output()
     ])
 
     task = PipelineWorker(
         pipeline,
-        params=PipelineParams(
-            # Standard configuration
-        )
+        params=PipelineParams()
     )
 
     runner = WorkerRunner()
@@ -583,15 +786,8 @@ async def vc_websocket_endpoint(websocket: WebSocket):
 
     wcfg = _resolve_whisper_config()
 
-    stt_service = WhisperSTTService(
-        device=wcfg["device"],
-        compute_type=wcfg["compute_type"],
-        settings=WhisperSTTService.Settings(
-            model=wcfg["model"],
-            language=wcfg["language"],
-            no_speech_prob=0.6,
-        )
-    )
+    # Reuse the already-loaded singleton model (no second disk load)
+    whisper_model = await _get_whisper_model(wcfg)
 
     vad_stop_secs = float(os.getenv("VAD_STOP_SECS", "0.3"))
     vad_analyzer = SileroVADAnalyzer(
@@ -604,13 +800,19 @@ async def vc_websocket_endpoint(websocket: WebSocket):
     )
     vad_processor = VADProcessor(vad_analyzer=vad_analyzer)
 
+    # StreamingWhisperProcessor: interim results while speaking + final on silence
+    streaming_stt = StreamingWhisperProcessor(
+        whisper_model=whisper_model,
+        language=wcfg["language"],
+    )
+
     # VCBroadcaster: transcripts → LangGraph → token stream → TTS audio
     vc_broadcaster = VCBroadcaster(websocket, session_id, tts_engine)
 
     pipeline = Pipeline([
         transport.input(),
         vad_processor,
-        stt_service,
+        streaming_stt,
         vc_broadcaster,
         transport.output()
     ])

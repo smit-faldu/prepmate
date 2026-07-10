@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Whisper VAD & STT - Pipecat Agent</title>
-    <meta name="description" content="An interactive, high-performance real-time speech transcription pipeline powered by Pipecat and local Whisper.">
+    <title>PrepMate STT — Local Whisper Streaming</title>
+    <meta name="description" content="Real-time local speech-to-text with rolling-buffer Whisper inference. Interim transcripts stream while you speak — no cloud, no latency.">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,9 +19,9 @@
         <!-- Header -->
         <header class="app-header">
             <h1 class="logo-title">
-                <span class="icon">🎙️</span> Pipecat Whisper <span class="gradient-text">VAD+STT</span>
+                <span class="icon">🎙️</span> Local Whisper <span class="gradient-text">Streaming STT</span>
             </h1>
-            <p class="logo-subtitle">Real-time local speech-to-text with Voice Activity Detection</p>
+            <p class="logo-subtitle">Real-time chunked inference · Interim results while you speak · Offline &amp; private</p>
         </header>
 
         <!-- Main Grid -->
@@ -29,15 +29,20 @@
             <!-- Left Panel: Controls & Visualizer -->
             <section class="control-panel glass">
                 <div class="panel-section">
-                    <h2>Connection & Settings</h2>
+                    <h2>Connection &amp; Status</h2>
                     <div class="setting-group">
-                        <label for="model-select">Whisper Model Size</label>
-                        <select id="model-select">
-                            <option value="tiny">Tiny (Fastest, ~75MB)</option>
-                            <option value="base" selected>Base (Recommended, ~140MB)</option>
-                            <option value="small">Small (More accurate, ~460MB)</option>
-                            <option value="medium">Medium (High accuracy, ~1.5GB)</option>
-                        </select>
+                        <label>STT Engine</label>
+                        <div class="engine-badge" id="engine-badge">
+                            <span class="engine-dot"></span>
+                            <span>Local Whisper (model: <span id="whisper-model-name">loading…</span>)</span>
+                        </div>
+                    </div>
+                    <div class="setting-group" style="margin-top:10px">
+                        <label>Streaming Mode</label>
+                        <div class="streaming-badge" id="streaming-badge">
+                            <span class="stream-pulse" id="stream-pulse"></span>
+                            <span id="streaming-label">Idle</span>
+                        </div>
                     </div>
                 </div>
 

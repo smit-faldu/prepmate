@@ -482,3 +482,71 @@ canvas {
         transform: translateY(0);
     }
 }
+
+/* ── Streaming Whisper UI additions ────────────────────────────────────────── */
+
+/* Engine badge — shows "Local Whisper (model: tiny)" */
+.engine-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(112, 0, 255, 0.12);
+    border: 1px solid rgba(112, 0, 255, 0.25);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+.engine-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-purple);
+    box-shadow: 0 0 6px var(--accent-purple);
+    flex-shrink: 0;
+}
+
+/* Streaming badge — shows "Streaming…" / "Idle" */
+.streaming-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 240, 255, 0.06);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    transition: var(--transition-smooth);
+}
+.stream-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+    transition: background 0.3s;
+}
+.stream-pulse.active {
+    background: var(--accent-cyan);
+    box-shadow: 0 0 8px var(--accent-cyan);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+/* Blinking block cursor shown inside interim text while Whisper streams */
+.stream-cursor {
+    display: inline-block;
+    margin-left: 2px;
+    color: var(--accent-cyan);
+    animation: blink-cursor 0.75s step-end infinite;
+    font-size: 0.9em;
+    vertical-align: baseline;
+    line-height: 1;
+}
+@keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+}
+
