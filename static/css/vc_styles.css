@@ -974,3 +974,339 @@ canvas#vc-visualizer {
   50%       { opacity: 0; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Vision HUD — Body Language Panel
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.vision-hud {
+  margin-top: 14px;
+  background: linear-gradient(135deg, rgba(11,11,28,0.95), rgba(17,17,38,0.92));
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 14px;
+  padding: 14px 14px 12px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.vision-hud::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6, #a855f7, #3b82f6);
+  background-size: 200% 100%;
+  animation: vision-shimmer 3s linear infinite;
+}
+
+@keyframes vision-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.vision-hud.hud-flash {
+  box-shadow: 0 0 18px rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+/* Header row */
+.vision-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.vision-hud-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vision-cam-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #475569;
+  box-shadow: 0 0 0 0 rgba(71, 85, 105, 0.4);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+  flex-shrink: 0;
+}
+
+.vision-cam-dot.active {
+  background: #22c55e;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+  animation: cam-pulse 2s ease-in-out infinite;
+}
+
+@keyframes cam-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+}
+
+.vision-hud-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  letter-spacing: 0.03em;
+}
+
+/* Webcam mini-preview */
+.vision-cam-wrap {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  aspect-ratio: 4 / 3;
+  background: #08081a;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.vision-cam-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);           /* mirror — natural for front-facing cam */
+  display: block;
+  border-radius: 9px;
+  opacity: 0.88;
+}
+
+.vision-cam-overlay {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 4px 8px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  background: linear-gradient(0deg, rgba(0,0,0,0.7), transparent);
+  text-align: center;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Expression / Pose pills */
+.vision-pill {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 9px 11px 8px;
+  margin-bottom: 8px;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.vision-pill:last-of-type {
+  margin-bottom: 0;
+}
+
+.vision-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.vision-pill-emoji {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.vision-pill-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.vision-pill-cat {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 1px;
+}
+
+.vision-pill-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+  transition: color 0.3s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vision-pill-conf {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+}
+
+/* Confidence bar */
+.vision-bar-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.07);
+  overflow: hidden;
+}
+
+.vision-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  width: 0%;
+  background: #94a3b8;
+  transition: width 0.5s ease, background 0.4s ease;
+}
+
+/* Note */
+.vision-hud-note {
+  margin: 10px 0 0;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
+.vision-hud-note strong {
+  color: var(--text-secondary);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Vision HUD — Blendshape Score Chart (new in v2 CV pipeline)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Section wrapper */
+.vision-scores-section {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 9px;
+}
+
+/* Header row: label + quality badge */
+.vision-scores-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Quality badge — changes class dynamically from JS */
+.vision-quality-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.vision-quality-badge.quality-high {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.vision-quality-badge.quality-mid {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.vision-quality-badge.quality-low {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+/* Chart container */
+.vision-scores-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Individual score row */
+.vscore-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 30px;
+  align-items: center;
+  gap: 5px;
+}
+
+.vscore-label {
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.vscore-track {
+  height: 4px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.vscore-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 2px;
+}
+
+.vscore-pct {
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: right;
+}
+
+.vscore-empty {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-style: italic;
+  text-align: center;
+  padding: 6px 0;
+}
+
+/* ── Mood-pop animation — VC avatar mood badge bounce on expression change */
+@keyframes mood-pop-anim {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.45) rotate(-8deg); }
+  60%  { transform: scale(1.2)  rotate(5deg); }
+  100% { transform: scale(1); }
+}
+
+.vc-mood-badge.mood-pop {
+  animation: mood-pop-anim 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Re-expose .vc-mood-badge selector so JS class toggle works */
+.vc-mood-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+

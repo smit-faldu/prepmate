@@ -213,6 +213,68 @@
             Introduce your product, target audience, and funding ask clearly.
           </div>
         </div>
+
+        <!-- ── Vision HUD ─────────────────────────────────────────────── -->
+        <div id="vision-hud" class="vision-hud" aria-live="polite" aria-label="Live body language analysis">
+          <div class="vision-hud-header">
+            <div class="vision-hud-title">
+              <span id="vision-cam-dot" class="vision-cam-dot"></span>
+              <span>Body Language</span>
+            </div>
+            <span class="vision-hud-badge" id="vision-status-text">Connecting…</span>
+          </div>
+
+          <!-- Webcam mini-preview -->
+          <div class="vision-cam-wrap">
+            <video id="vision-cam-preview" class="vision-cam-preview"
+              autoplay muted playsinline
+              aria-label="Webcam preview"
+              title="Live webcam feed (processed locally)"
+            ></video>
+            <div class="vision-cam-overlay">AI Vision Active</div>
+          </div>
+
+          <!-- Expression pill -->
+          <div class="vision-pill" id="vision-expr-pill">
+            <div class="vision-pill-row">
+              <span class="vision-pill-emoji" id="vision-expr-emoji">😐</span>
+              <div class="vision-pill-info">
+                <span class="vision-pill-cat">Expression</span>
+                <span class="vision-pill-label" id="vision-expr-label">Analyzing…</span>
+              </div>
+              <span class="vision-pill-conf" id="vision-expr-conf">—</span>
+            </div>
+            <div class="vision-bar-track">
+              <div class="vision-bar-fill" id="vision-expr-bar"></div>
+            </div>
+          </div>
+
+          <!-- Pose pill -->
+          <div class="vision-pill" id="vision-pose-pill">
+            <div class="vision-pill-row">
+              <span class="vision-pill-emoji" id="vision-pose-emoji">🧍</span>
+              <div class="vision-pill-info">
+                <span class="vision-pill-cat">Posture</span>
+                <span class="vision-pill-label" id="vision-pose-label">Analyzing…</span>
+              </div>
+              <span class="vision-pill-conf" id="vision-pose-conf">—</span>
+            </div>
+            <div class="vision-bar-track">
+              <div class="vision-bar-fill" id="vision-pose-bar"></div>
+            </div>
+          </div>
+
+          <!-- Raw blendshape score breakdown (new — shows all 8 expression weights) -->
+          <div class="vision-scores-section">
+            <div class="vision-scores-header">
+              <span>Blendshape Scores</span>
+              <span id="vision-quality-badge" class="vision-quality-badge">Waiting…</span>
+            </div>
+            <div id="vision-scores-chart" class="vision-scores-chart" aria-label="Expression score breakdown"></div>
+          </div>
+
+          <p class="vision-hud-note">📡 52 ARKit blendshapes → EMA-smoothed. AI uses body language as a <strong>secondary</strong> signal. Audio is primary.</p>
+        </div>
       </div>
     </aside>
 
@@ -256,6 +318,26 @@
 
 <!-- Scripts -->
 <script src="/static/js/pcm-processor.js" defer></script>
+<script src="/static/js/vision_client.js" defer></script>
 <script src="/static/js/vc_client.js" defer></script>
+<script>
+  // Hook into vc_client.js session_id once it's available.
+  // vc_client.js must expose window.__vcSessionId after WebSocket connects.
+  // We poll briefly then start the vision pipeline with the same session_id.
+  (function() {
+    let _attempts = 0;
+    const _poll = setInterval(function() {
+      _attempts++;
+      const sid = window.__vcSessionId;
+      if (sid) {
+        clearInterval(_poll);
+        VisionClient.start(sid);
+      } else if (_attempts > 60) {
+        clearInterval(_poll);
+        console.warn('[Vision] Could not retrieve session_id from vc_client.js after 6s');
+      }
+    }, 100);
+  })();
+</script>
 </body>
 </html>

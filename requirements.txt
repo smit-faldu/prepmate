@@ -10,3 +10,7 @@ langgraph-checkpoint-sqlite
 langchain
 langchain-core
 langchain-google-genai
+
+# ── Computer Vision (MediaPipe Holistic face + pose analysis) ─────────────────
+mediapipe
+opencv-python-headless    # headless: no GUI deps, works in server env

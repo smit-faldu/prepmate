@@ -16,6 +16,14 @@ from loguru import logger
 # vc_agent.py module docstring for the architecture).
 from vc_agent import new_session, run_turn_streaming
 
+# Vision pipeline — MediaPipe Holistic expression/pose analysis
+from mediapipe_vision_processor import (
+    MediaPipeVisionProcessor,
+    VisionAnalysisFrame,
+    build_vision_context_block,
+    vision_state,
+)
+
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
@@ -650,11 +658,21 @@ class VCBroadcaster(FrameProcessor):
     VAD / interim events are still forwarded for UI feedback.
     """
 
-    def __init__(self, websocket: WebSocket, session_id: str, tts_engine: "TTSEngine"):
+    def __init__(
+        self,
+        websocket: WebSocket,
+        session_id: str,
+        tts_engine: "TTSEngine",
+        vision_session_id: str = "",
+    ):
         super().__init__()
-        self._websocket  = websocket
-        self._session_id = session_id
-        self._tts        = tts_engine
+        self._websocket         = websocket
+        self._session_id        = session_id
+        self._tts               = tts_engine
+        # Vision session_id: links this broadcaster to a /ws/vision session.
+        # When set, body language context is injected into every VC turn prompt.
+        # Audio is always primary; vision is a soft secondary signal.
+        self._vision_session_id = vision_session_id or session_id
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
@@ -681,8 +699,39 @@ class VCBroadcaster(FrameProcessor):
                 final_vc_text  = ""
                 final_event    = None
 
+                # ── 1.5 Inject vision body language context (secondary) ─────
+                # Read the latest expression/pose BEFORE calling the agent so
+                # Marcus Reid has multimodal context for this turn.
+                # Audio remains the primary basis; vision is a soft signal.
+                vision_data = await vision_state.get(self._vision_session_id)
+                vision_block = build_vision_context_block(vision_data)
+                if vision_block:
+                    logger.debug(
+                        f"[VC] Vision context injected → "
+                        f"expr={vision_data.get('expression')} "
+                        f"pose={vision_data.get('pose')}"
+                    )
+
+                # Enrich the founder text with body language as a bracketed
+                # annotation so the VC LLM receives it as part of the input
+                # rather than as a system prompt modification (keeps turn
+                # history clean and avoids prompt injection surface).
+                enriched_text = text
+                if vision_block:
+                    expr = vision_data.get("expression", "")
+                    pose = vision_data.get("pose", "")
+                    expr_conf = vision_data.get("expression_confidence", 0)
+                    pose_conf = vision_data.get("pose_confidence", 0)
+                    if expr_conf > 0.35 or pose_conf > 0.35:
+                        enriched_text = (
+                            f"{text}\n"
+                            f"[Body Language Context — secondary signal, audio is primary: "
+                            f"facial expression = {expr} ({expr_conf:.0%} confidence), "
+                            f"body pose = {pose} ({pose_conf:.0%} confidence)]"
+                        )
+
                 try:
-                    async for event in run_turn_streaming(self._session_id, text):
+                    async for event in run_turn_streaming(self._session_id, enriched_text):
                         if event["type"] == "token":
                             if first_token_at is None:
                                 first_token_at = time.monotonic()
@@ -830,6 +879,128 @@ async def vc_websocket_endpoint(websocket: WebSocket):
         logger.error(f"[VC] Pipeline exception: {e}")
     finally:
         logger.info(f"[VC] WebSocket closed. session_id={session_id}")
+
+
+# ---------------------------------------------------------------------------
+# /ws/vision — Dedicated webcam vision WebSocket endpoint
+# ---------------------------------------------------------------------------
+# The browser opens this as a SECOND WebSocket alongside /ws/vc.
+# It receives JPEG frames, runs MediaPipe Holistic, and:
+#   1. Sends VisionAnalysisFrame events back as JSON to the browser (for HUD)
+#   2. Updates the shared VisionState so VCBroadcaster can inject body
+#      language context into the VC AI on the next turn.
+# The session_id MUST match the /ws/vc session_id so both pipelines share state.
+# ---------------------------------------------------------------------------
+
+class VisionBroadcaster(FrameProcessor):
+    """
+    Downstream of MediaPipeVisionProcessor — catches VisionAnalysisFrame
+    and sends real-time expression/pose data back to the browser as JSON
+    for the live HUD overlay.
+    All other frames pass through unchanged.
+    """
+
+    def __init__(self, websocket: WebSocket):
+        super().__init__()
+        self._websocket = websocket
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, VisionAnalysisFrame):
+            try:
+                await self._websocket.send_text(json.dumps({
+                    "type":                   "vision",
+                    "expression":             frame.expression,
+                    "expression_confidence":  frame.expression_confidence,
+                    "pose":                   frame.pose,
+                    "pose_confidence":        frame.pose_confidence,
+                    "raw_scores":             frame.raw_expression_scores,
+                }))
+            except Exception as e:
+                logger.warning(f"[VisionBroadcaster] WS send error: {e}")
+
+        await self.push_frame(frame, direction)
+
+
+class RawJPEGSerializer(FrameSerializer):
+    """
+    Simple serializer that wraps raw binary (JPEG) WebSocket messages
+    directly as InputImageRawFrame. The browser sends webcam frames as
+    raw JPEG binary blobs with no envelope.
+    """
+
+    async def serialize(self, frame: Frame) -> bytes | None:
+        return None  # server never sends binary on this vision socket
+
+    async def deserialize(self, data: bytes | str) -> Frame | None:
+        from pipecat.frames.frames import InputImageRawFrame
+        if not data or not isinstance(data, bytes):
+            return None
+        return InputImageRawFrame(
+            image=data,
+            size=(0, 0),    # dimensions decoded inside MediaPipeVisionProcessor
+            format="JPEG",
+        )
+
+
+@app.websocket("/ws/vision")
+async def vision_websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket for the computer vision pipeline.
+    Browser sends JPEG frames; server responds with expression/pose JSON.
+
+    Query params:
+      session_id — MUST match the /ws/vc session_id so VisionState is shared.
+    """
+    await websocket.accept()
+
+    session_id = websocket.query_params.get("session_id", new_session())
+    logger.info(f"[Vision] WebSocket connected. session_id={session_id}")
+
+    # Throttle: process every 3rd frame (15fps webcam → ~5fps inference)
+    process_every_n = int(os.getenv("VISION_PROCESS_EVERY_N", "3"))
+    min_detect = float(os.getenv("VISION_MIN_DETECT", "0.5"))
+    min_track  = float(os.getenv("VISION_MIN_TRACK", "0.5"))
+
+    serializer = RawJPEGSerializer()
+    transport  = FastAPIWebsocketTransport(
+        websocket=websocket,
+        params=FastAPIWebsocketParams(
+            audio_in_enabled=False,
+            audio_out_enabled=False,
+            video_in_enabled=True,
+            serializer=serializer,
+        )
+    )
+
+    vision_processor = MediaPipeVisionProcessor(
+        session_id=session_id,
+        min_detection_confidence=min_detect,
+        min_tracking_confidence=min_track,
+        process_every_n=process_every_n,
+    )
+
+    vision_broadcaster = VisionBroadcaster(websocket)
+
+    pipeline = Pipeline([
+        transport.input(),
+        vision_processor,
+        vision_broadcaster,
+        transport.output(),
+    ])
+
+    task   = PipelineWorker(pipeline, params=PipelineParams())
+    runner = WorkerRunner()
+
+    try:
+        await runner.add_workers(task)
+        await runner.run()
+    except Exception as e:
+        logger.error(f"[Vision] Pipeline exception: {e}")
+    finally:
+        await vision_processor.cleanup()
+        logger.info(f"[Vision] WebSocket closed. session_id={session_id}")
 
 
 if __name__ == "__main__":

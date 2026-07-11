@@ -230,6 +230,7 @@ async function startPitch() {
 
     // Create a new server-side session
     sessionId = await createSession();
+    window.__vcSessionId = sessionId;   // expose for vision_client.js
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/vc?session_id=${sessionId}`;
