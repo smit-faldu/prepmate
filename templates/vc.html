@@ -1,329 +1,597 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PrepMate — VC Pitch Arena</title>
-  <meta name="description" content="Face a sharp AI Venture Capitalist. Pitch your startup live and get real-time multi-agent evaluation across 4 stages: Introduction, Deep Dive, Negotiation, and Decision.">
+  <meta name="description" content="Pitch your startup to Elena Vasquez, an AI Venture Capitalist. Get real-time multi-agent evaluation across 4 stages: Introduction, Deep Dive, Negotiation, and Decision.">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            surface: {
+              DEFAULT: '#0d0f1a',
+              1: '#111827',
+              2: '#1a1f2e',
+              3: '#1e2436',
+            },
+            accent: {
+              gold: '#d4a844',
+              'gold-light': '#f0c96a',
+              violet: '#7c5af0',
+              teal: '#2dd4bf',
+              red: '#f87171',
+              green: '#4ade80',
+            },
+            border: {
+              DEFAULT: 'rgba(255,255,255,0.07)',
+              glow: 'rgba(212,168,68,0.3)',
+            },
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'float': 'float 6s ease-in-out infinite',
+            'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
+            'thinking': 'thinking 1.4s ease-in-out infinite',
+            'ripple': 'ripple 2s ease-out infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-8px)' },
+            },
+            'glow-pulse': {
+              '0%, 100%': { boxShadow: '0 0 20px rgba(212,168,68,0.2)' },
+              '50%': { boxShadow: '0 0 40px rgba(212,168,68,0.5)' },
+            },
+            thinking: {
+              '0%, 80%, 100%': { transform: 'scale(0)', opacity: '0' },
+              '40%': { transform: 'scale(1)', opacity: '1' },
+            },
+            ripple: {
+              '0%': { transform: 'scale(1)', opacity: '0.6' },
+              '100%': { transform: 'scale(2.5)', opacity: '0' },
+            },
+          },
+          backdropBlur: { xs: '2px' },
+          boxShadow: {
+            'glass': '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
+            'gold-glow': '0 0 30px rgba(212,168,68,0.25)',
+            'card-hover': '0 16px 48px rgba(0,0,0,0.6)',
+          },
+        },
+      },
+    }
+  </script>
+
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/vc_styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    * { box-sizing: border-box; }
+    body { background-color: #0d0f1a; font-family: 'Inter', sans-serif; }
+
+    /* Animated mesh background */
+    .bg-mesh {
+      position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+    }
+    .bg-mesh::before {
+      content: '';
+      position: absolute; width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(124,90,240,0.12) 0%, transparent 70%);
+      top: -100px; left: -100px;
+      animation: meshDrift1 18s ease-in-out infinite alternate;
+    }
+    .bg-mesh::after {
+      content: '';
+      position: absolute; width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(212,168,68,0.08) 0%, transparent 70%);
+      bottom: -50px; right: -50px;
+      animation: meshDrift2 22s ease-in-out infinite alternate;
+    }
+    @keyframes meshDrift1 {
+      from { transform: translate(0, 0) scale(1); }
+      to   { transform: translate(120px, 80px) scale(1.2); }
+    }
+    @keyframes meshDrift2 {
+      from { transform: translate(0, 0) scale(1); }
+      to   { transform: translate(-80px, -60px) scale(1.15); }
+    }
+
+    /* Glassmorphism card */
+    .glass {
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid rgba(255,255,255,0.07);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    /* Stage step connector */
+    .stage-steps { display: flex; align-items: center; gap: 0; }
+    .stage-step { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.35); transition: all 0.3s; cursor: default; padding: 4px 10px; border-radius: 20px; }
+    .stage-step.active { color: #d4a844; background: rgba(212,168,68,0.12); }
+    .stage-step.done { color: #4ade80; }
+    .stage-connector { width: 24px; height: 1px; background: rgba(255,255,255,0.1); flex-shrink: 0; }
+    .stage-connector.done-line { background: rgba(74,222,128,0.4); }
+
+    /* Mic button */
+    .mic-btn-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+    .mic-btn {
+      position: relative; z-index: 2;
+      width: 72px; height: 72px; border-radius: 50%;
+      background: linear-gradient(135deg, #d4a844 0%, #b8892e 100%);
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; transition: all 0.25s;
+      box-shadow: 0 0 0 0 rgba(212,168,68,0.4), 0 8px 24px rgba(212,168,68,0.3);
+    }
+    .mic-btn:hover { transform: scale(1.06); box-shadow: 0 0 0 0 rgba(212,168,68,0.5), 0 12px 32px rgba(212,168,68,0.4); }
+    .mic-btn.recording {
+      background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+      box-shadow: 0 0 0 8px rgba(248,113,113,0.15), 0 8px 24px rgba(248,113,113,0.4);
+      animation: mic-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 8px rgba(248,113,113,0.15), 0 8px 24px rgba(248,113,113,0.4); }
+      50% { box-shadow: 0 0 0 16px rgba(248,113,113,0.05), 0 8px 32px rgba(248,113,113,0.5); }
+    }
+
+    /* Chat messages */
+    .msg { display: flex; gap: 10px; animation: msgIn 0.3s ease forwards; }
+    @keyframes msgIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+    .msg-bubble { padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; max-width: 100%; }
+    .msg-vc .msg-bubble { background: rgba(124,90,240,0.15); border: 1px solid rgba(124,90,240,0.2); border-bottom-left-radius: 4px; }
+    .msg-founder .msg-bubble { background: rgba(212,168,68,0.1); border: 1px solid rgba(212,168,68,0.2); border-bottom-right-radius: 4px; }
+
+    /* Thinking dots */
+    .thinking-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #7c5af0; animation: thinking 1.4s ease-in-out infinite; }
+    .thinking-dot:nth-child(2) { animation-delay: 0.16s; }
+    .thinking-dot:nth-child(3) { animation-delay: 0.32s; }
+    @keyframes thinking {
+      0%, 80%, 100% { transform: scale(0.5); opacity: 0.3; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Clarity bar */
+    .clarity-track { height: 6px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .clarity-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease, background 0.4s; }
+
+    /* Market validity badges */
+    .market-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+    .market-badge.valid { background: rgba(74,222,128,0.1); color: #4ade80; border: 1px solid rgba(74,222,128,0.2); }
+    .market-badge.invalid { background: rgba(248,113,113,0.1); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+    .market-badge.not_mentioned { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.08); }
+
+    /* Intel items */
+    .intel-val { font-size: 13px; color: rgba(255,255,255,0.8); line-height: 1.5; transition: all 0.3s; }
+    .intel-val.updated { color: #f0c96a; }
+
+    /* Vision HUD pills */
+    .vision-bar-track { height: 4px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; margin-top: 4px; }
+    .vision-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #7c5af0, #2dd4bf); transition: width 0.5s ease; }
+
+    /* Connection status */
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); display: inline-block; transition: all 0.3s; }
+    .conn-dot.connected { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.6); animation: pulse-slow 2s infinite; }
+    .conn-dot.disconnected { background: rgba(255,255,255,0.2); }
+
+    /* "I'm Out" overlay */
+    #out-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); align-items: center; justify-content: center; }
+    #out-overlay.visible { display: flex; }
+
+    /* Score bars (blendshapes) */
+    .score-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .score-bar-label { font-size: 10px; color: rgba(255,255,255,0.4); width: 60px; flex-shrink: 0; }
+    .score-bar-bg { flex: 1; height: 3px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #7c5af0, #2dd4bf); transition: width 0.4s ease; }
+    .score-bar-val { font-size: 10px; color: rgba(255,255,255,0.35); font-family: 'JetBrains Mono', monospace; width: 28px; text-align: right; }
+
+    /* Live pulse on header */
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; display: inline-block; animation: pulse-slow 2s infinite; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+  </style>
 </head>
-<body>
+<body class="min-h-screen text-white overflow-hidden" style="background:#0d0f1a">
 
-<!-- Animated background -->
-<div class="bg-scene" aria-hidden="true"></div>
+<!-- Animated background mesh -->
+<div class="bg-mesh" aria-hidden="true"></div>
 
-<div class="app-wrapper">
+<!-- ── App Shell ──────────────────────────────────────────────────────────── -->
+<div class="relative z-10 flex flex-col h-screen">
 
-  <!-- ── Header ─────────────────────────────────────────────────────────── -->
-  <header class="app-header" role="banner">
-    <div class="brand">
-      <div class="brand-logo" aria-hidden="true">💼</div>
+  <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
+  <header class="glass border-b border-white/5 px-5 py-3 flex items-center gap-4 shrink-0" role="banner">
+
+    <!-- Brand -->
+    <div class="flex items-center gap-3 mr-4">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
+           style="background: linear-gradient(135deg,#d4a844,#7c5af0)">💼</div>
       <div>
-        <div class="brand-name">PrepMate <span style="color:var(--gold-primary)">VC Arena</span></div>
-        <div class="brand-tagline">Multi-Agent Pitch Evaluator · Powered by LangGraph + Gemini</div>
+        <div class="font-bold text-sm leading-tight">
+          PrepMate <span class="text-accent-gold">VC Arena</span>
+        </div>
+        <div class="text-[10px] text-white/35 leading-none mt-0.5">Multi-Agent Pitch Evaluator · LangGraph + Gemini</div>
       </div>
     </div>
 
-    <!-- Stage Progress Tracker -->
-    <nav class="stage-tracker glass-card" aria-label="Pitch stage progress" role="navigation">
+    <!-- Stage tracker -->
+    <nav class="stage-steps flex-1" aria-label="Pitch stage progress">
       <div class="stage-step active" data-stage="intro" id="step-intro">
-        <span class="step-dot"></span> Introduction
+        <span>●</span> Introduction
       </div>
+      <div class="stage-connector" id="conn-1"></div>
       <div class="stage-step" data-stage="deep_dive" id="step-deep_dive">
-        <span class="step-dot"></span> Deep Dive
+        <span>●</span> Deep Dive
       </div>
+      <div class="stage-connector" id="conn-2"></div>
       <div class="stage-step" data-stage="negotiation" id="step-negotiation">
-        <span class="step-dot"></span> Negotiation
+        <span>●</span> Negotiation
       </div>
+      <div class="stage-connector" id="conn-3"></div>
       <div class="stage-step" data-stage="decision" id="step-decision">
-        <span class="step-dot"></span> Decision
+        <span>●</span> Decision
       </div>
     </nav>
 
-    <div class="header-right">
-      <div class="conn-status" id="conn-status" role="status" aria-live="polite">
-        <span class="conn-dot"></span>
-        <span id="conn-text">Disconnected</span>
-      </div>
+    <!-- Connection status -->
+    <div class="flex items-center gap-2 text-xs text-white/40 ml-auto shrink-0" id="conn-status" role="status" aria-live="polite">
+      <span class="conn-dot disconnected" id="conn-dot"></span>
+      <span id="conn-text">Disconnected</span>
     </div>
   </header>
 
-  <!-- ── Main Grid ───────────────────────────────────────────────────────── -->
-  <main class="arena-grid" role="main">
+  <!-- ── MAIN GRID ──────────────────────────────────────────────────────── -->
+  <main class="flex flex-1 gap-3 p-3 overflow-hidden min-h-0" role="main">
 
-    <!-- LEFT: VC Investor Card + Pitch Intelligence -->
-    <aside class="vc-panel" aria-label="VC investor profile">
+    <!-- ── LEFT PANEL: VC Profile + Intel ─────────────────────────────── -->
+    <aside class="w-64 flex flex-col gap-3 shrink-0 overflow-y-auto" aria-label="VC investor profile">
 
-      <div class="glass-card" style="margin-bottom:14px">
-        <!-- VC Identity -->
-        <div class="vc-identity">
-          <div class="vc-avatar-wrap">
-            <img
-              id="vc-avatar"
-              class="vc-avatar"
-              src="/static/img/vc_avatar.png"
-              alt="Marcus Reid, Managing Partner"
-              onerror="this.style.display='none'; document.getElementById('vc-avatar-fallback').style.display='flex'"
-            >
-            <!-- Fallback avatar if image missing -->
-            <div id="vc-avatar-fallback" style="
-              display:none; width:80px; height:80px; border-radius:50%;
-              background:linear-gradient(135deg,#1a1a3a,#2a2a4a);
-              border:3px solid var(--gold-primary);
-              box-shadow:0 0 28px rgba(201,162,39,0.35);
-              align-items:center; justify-content:center;
-              font-size:32px;
-            " aria-hidden="true">🤵</div>
-            <div class="vc-mood-badge" id="vc-mood" aria-label="VC mood: interested">🧐</div>
+      <!-- VC Identity Card -->
+      <div class="glass rounded-2xl p-4">
+        <!-- Avatar + name -->
+        <div class="flex flex-col items-center text-center mb-4">
+          <div class="relative mb-3">
+            <div class="w-20 h-20 rounded-full flex items-center justify-center text-4xl relative overflow-hidden"
+                 style="background: linear-gradient(135deg, #1a1230, #2a1a4a); border: 2px solid rgba(212,168,68,0.4); box-shadow: 0 0 24px rgba(212,168,68,0.2)">
+              <img id="vc-avatar" src="/static/img/vc_avatar.png" alt="Elena Vasquez"
+                   class="w-full h-full object-cover rounded-full"
+                   onerror="this.style.display='none'; document.getElementById('vc-avatar-fallback').style.display='flex'">
+              <div id="vc-avatar-fallback" class="w-full h-full items-center justify-content-center text-4xl" style="display:none">👩‍💼</div>
+            </div>
+            <!-- Mood badge -->
+            <div id="vc-mood"
+                 class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center text-sm"
+                 style="background:#1a1f2e; border: 2px solid rgba(255,255,255,0.1)"
+                 aria-label="VC mood">🎧</div>
           </div>
-          <div class="vc-name">Marcus Reid</div>
-          <div class="vc-title">Managing Partner · Reid Capital</div>
-          <div class="vc-status-pill" id="vc-status-pill">
-            <span class="pill-dot"></span>
+          <div class="font-bold text-white text-base">Elena Vasquez</div>
+          <div class="text-xs text-white/40 mt-0.5">Managing Partner · Vasquez Capital</div>
+
+          <!-- VC status pill -->
+          <div id="vc-status-pill"
+               class="mt-2 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+               style="background: rgba(45,212,191,0.1); border: 1px solid rgba(45,212,191,0.2); color: #2dd4bf">
+            <span class="live-dot" style="background:#2dd4bf; box-shadow: 0 0 6px rgba(45,212,191,0.6)"></span>
             <span id="vc-status-text">Listening</span>
           </div>
         </div>
 
         <!-- VC Stats -->
-        <div class="vc-stats">
-          <div class="stat-row">
-            <span class="stat-label">Fund Size</span>
-            <span class="stat-value">$400M</span>
+        <div class="space-y-2 pt-3 border-t border-white/5">
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-white/35">Fund Size</span>
+            <span class="text-xs font-semibold text-accent-gold">$300M</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-label">Portfolio</span>
-            <span class="stat-value">47 AI Startups</span>
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-white/35">Portfolio</span>
+            <span class="text-xs font-semibold text-white/70">38 AI Startups</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-label">Sweet Spot</span>
-            <span class="stat-value">$250K – $5M</span>
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-white/35">Sweet Spot</span>
+            <span class="text-xs font-semibold text-white/70">$250K – $5M</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-label">Focus</span>
-            <span class="stat-value">AI-First B2B</span>
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-white/35">Focus</span>
+            <span class="text-xs font-semibold text-white/70">AI-First & Deep Tech</span>
           </div>
         </div>
       </div>
 
-      <!-- Pitch Intelligence Panel -->
-      <div class="glass-card">
-        <div class="intel-panel-header">
-          <h3>Pitch Intelligence</h3>
-          <span class="exchange-badge" id="exchange-count" aria-live="polite">Turn 0</span>
+      <!-- Pitch Intelligence -->
+      <div class="glass rounded-2xl p-4 flex-1">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-bold uppercase tracking-widest text-white/40">Pitch Intelligence</h3>
+          <span id="exchange-count"
+                class="text-[10px] font-mono px-2 py-0.5 rounded-full"
+                style="background:rgba(124,90,240,0.1); color:#7c5af0; border:1px solid rgba(124,90,240,0.2)"
+                aria-live="polite">Turn 0</span>
         </div>
-        <div class="intel-body" id="intel-body">
 
-          <div class="intel-item" id="intel-product">
-            <div class="intel-item-label">Product</div>
-            <div class="intel-item-value" id="intel-product-val">—</div>
+        <div class="space-y-3" id="intel-body">
+          <div id="intel-product">
+            <div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Product</div>
+            <div class="intel-val text-sm text-white/50" id="intel-product-val">—</div>
+          </div>
+          <div id="intel-market">
+            <div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Market Claim</div>
+            <div class="intel-val text-sm text-white/50" id="intel-market-val">—</div>
+          </div>
+          <div id="intel-ask">
+            <div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Ask</div>
+            <div class="intel-val text-sm text-white/50" id="intel-ask-val">—</div>
+          </div>
+          <div id="intel-traction">
+            <div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Traction</div>
+            <div class="intel-val text-sm text-white/50" id="intel-traction-val">—</div>
           </div>
 
-          <div class="intel-item" id="intel-market">
-            <div class="intel-item-label">Market Claim</div>
-            <div class="intel-item-value" id="intel-market-val">—</div>
-          </div>
-
-          <div class="intel-item" id="intel-ask">
-            <div class="intel-item-label">Ask</div>
-            <div class="intel-item-value" id="intel-ask-val">—</div>
-          </div>
-
-          <div class="intel-item" id="intel-traction">
-            <div class="intel-item-label">Traction</div>
-            <div class="intel-item-value" id="intel-traction-val">—</div>
-          </div>
-
-          <div class="intel-item" id="intel-clarity">
-            <div class="intel-item-label">Clarity Score</div>
-            <div class="clarity-bar">
-              <div class="clarity-track">
-                <div class="clarity-fill" id="clarity-fill"></div>
-              </div>
-              <div class="clarity-score-label" id="clarity-score-label">—</div>
+          <!-- Clarity Score -->
+          <div id="intel-clarity">
+            <div class="flex justify-between items-center mb-1">
+              <div class="text-[10px] uppercase tracking-wider text-white/30">Clarity Score</div>
+              <div class="text-xs font-mono text-white/50" id="clarity-score-label">—</div>
+            </div>
+            <div class="clarity-track">
+              <div class="clarity-fill" id="clarity-fill" style="width:0%; background: linear-gradient(90deg,#7c5af0,#2dd4bf)"></div>
             </div>
           </div>
 
-          <div class="intel-item" id="intel-flags" style="display:none">
-            <div class="intel-item-label" style="color:var(--accent-red)">⚠ Red Flags</div>
-            <div class="red-flags-list" id="red-flags-list"></div>
+          <!-- Red Flags -->
+          <div id="intel-flags" class="hidden">
+            <div class="text-[10px] uppercase tracking-wider text-red-400 mb-1.5">⚠ Red Flags</div>
+            <div id="red-flags-list" class="space-y-1"></div>
           </div>
-
         </div>
       </div>
+
     </aside>
 
-    <!-- CENTER: Live Conversation Feed -->
-    <section class="chat-panel glass-card" aria-label="Pitch conversation">
-      <div class="chat-header">
-        <span class="chat-title">Live Pitch Session</span>
-        <div class="live-indicator" id="live-indicator" aria-live="polite">
+    <!-- ── CENTER PANEL: Live Chat ──────────────────────────────────────── -->
+    <section class="glass rounded-2xl flex flex-col flex-1 min-w-0 overflow-hidden" aria-label="Pitch conversation">
+
+      <!-- Chat header -->
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-white/5 shrink-0">
+        <div class="font-semibold text-sm text-white/80">Live Pitch Session</div>
+        <div class="flex items-center gap-1.5 text-xs font-medium text-emerald-400" id="live-indicator" aria-live="polite">
           <span class="live-dot"></span> LIVE
         </div>
       </div>
 
       <!-- Message feed -->
-      <div class="chat-feed" id="chat-feed" role="log" aria-live="polite" aria-label="Conversation messages">
+      <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0" id="chat-feed"
+           role="log" aria-live="polite" aria-label="Conversation messages">
         <!-- Empty state -->
-        <div class="chat-empty" id="chat-empty">
-          <div class="chat-empty-icon" aria-hidden="true">🎙️</div>
-          <h3>Ready to Hear Your Pitch</h3>
-          <p>Click the microphone below and start speaking. Marcus Reid is listening — make it count.</p>
+        <div id="chat-empty" class="flex flex-col items-center justify-center h-full text-center py-12">
+          <div class="text-5xl mb-4 animate-bounce">🎙️</div>
+          <h3 class="text-lg font-semibold text-white/70 mb-2">Ready to Hear Your Pitch</h3>
+          <p class="text-sm text-white/35 max-w-xs leading-relaxed">
+            Click the microphone below and start speaking. Elena Vasquez is ready — make it count.
+          </p>
         </div>
       </div>
 
-      <!-- VC Thinking Indicator -->
-      <div class="vc-thinking" id="vc-thinking" aria-live="polite" aria-label="VC is thinking">
-        <span>Marcus is evaluating...</span>
-        <div class="thinking-dots" aria-hidden="true">
-          <span></span><span></span><span></span>
+      <!-- VC Thinking indicator -->
+      <div id="vc-thinking" class="hidden px-5 py-3 border-t border-white/5 shrink-0" aria-live="polite" aria-label="VC is thinking">
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1">
+            <span class="thinking-dot"></span>
+            <span class="thinking-dot"></span>
+            <span class="thinking-dot"></span>
+          </div>
+          <span class="text-xs text-white/40">Elena is evaluating…</span>
         </div>
       </div>
 
       <!-- Interim transcript bar -->
-      <div class="interim-bar" aria-live="polite" role="status">
-        <span class="interim-icon" aria-hidden="true">🎤</span>
-        <span class="interim-content" id="interim-content">Start speaking to pitch your idea...</span>
+      <div class="border-t border-white/5 px-5 py-3 shrink-0" aria-live="polite" role="status">
+        <div class="flex items-center gap-2 text-xs text-white/40">
+          <span>🎤</span>
+          <span id="interim-content">Start speaking to pitch your idea…</span>
+        </div>
+      </div>
+
+      <!-- Controls bar -->
+      <div class="border-t border-white/5 px-5 py-4 flex items-center justify-between gap-4 shrink-0"
+           role="toolbar" aria-label="Pitch controls">
+
+        <!-- Left: status -->
+        <div class="flex items-center gap-2 text-xs text-white/40 flex-1" id="conn-status-2" aria-live="polite">
+          <span class="conn-dot disconnected" id="conn-dot-2"></span>
+          <span id="conn-text-2">Press mic to start</span>
+        </div>
+
+        <!-- Center: Mic button -->
+        <div class="mic-btn-wrap">
+          <button id="mic-btn" class="mic-btn" aria-label="Start recording microphone" aria-pressed="false">
+            <span id="mic-icon">🎤</span>
+          </button>
+        </div>
+
+        <!-- Right: controls info + mute -->
+        <div class="flex items-center gap-3 flex-1 justify-end">
+          <div class="text-right hidden sm:block">
+            <div class="text-xs font-semibold text-white/60" id="controls-label">Start Pitch</div>
+            <div class="text-[10px] text-white/30" id="controls-sublabel">Click mic &amp; speak clearly</div>
+          </div>
+          <button id="mute-btn"
+                  class="w-9 h-9 rounded-full flex items-center justify-center text-base transition-all hover:scale-110 active:scale-95"
+                  style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08)"
+                  aria-label="Mute voice" title="Mute / Unmute Elena Vasquez's voice" onclick="toggleMute()">
+            <span id="mute-icon">🔊</span>
+          </button>
+        </div>
       </div>
     </section>
 
-    <!-- RIGHT: Audio Visualizer + Stage Info -->
-    <aside class="viz-panel" aria-label="Audio visualizer and stage info">
+    <!-- ── RIGHT PANEL: Audio + Vision ─────────────────────────────────── -->
+    <aside class="w-60 flex flex-col gap-3 shrink-0 overflow-y-auto" aria-label="Audio visualizer and stage info">
 
-      <div class="glass-card">
-        <div class="viz-header">Audio Input</div>
-        <div class="viz-canvas-wrap">
-          <canvas id="vc-visualizer" width="240" height="100" aria-label="Audio waveform visualizer"></canvas>
+      <!-- Audio + Stage block -->
+      <div class="glass rounded-2xl p-4">
+        <div class="text-[10px] uppercase tracking-widest text-white/30 mb-3 font-bold">Audio Input</div>
+        <canvas id="vc-visualizer" width="200" height="64"
+                class="w-full rounded-xl mb-3"
+                style="background:rgba(255,255,255,0.02)"
+                aria-label="Audio waveform visualizer"></canvas>
+
+        <!-- Market validity -->
+        <div class="mb-3">
+          <div id="market-badge" class="market-badge not_mentioned w-full justify-center" aria-live="polite">
+            Market: —
+          </div>
         </div>
 
-        <!-- Market validity badge -->
-        <div class="market-badge not_mentioned" id="market-badge" aria-live="polite">
-          Market: —
-        </div>
-
-        <!-- Stage info block -->
-        <div class="stage-info-block" style="border-top:1px solid var(--border)">
-          <div class="intel-item-label">Current Stage</div>
-          <div class="stage-badge" data-stage="intro" id="stage-badge">
+        <!-- Current Stage -->
+        <div class="pt-3 border-t border-white/5">
+          <div class="text-[10px] uppercase tracking-wider text-white/30 mb-2">Current Stage</div>
+          <div id="stage-badge"
+               class="text-xs font-semibold px-3 py-1.5 rounded-xl mb-2 text-center"
+               style="background:rgba(212,168,68,0.1); color:#d4a844; border:1px solid rgba(212,168,68,0.2)"
+               data-stage="intro">
             🌱 Introduction
           </div>
-          <div class="stage-desc" id="stage-desc">
+          <div class="text-[11px] text-white/35 leading-relaxed" id="stage-desc">
             Introduce your product, target audience, and funding ask clearly.
           </div>
         </div>
-
-        <!-- ── Vision HUD ─────────────────────────────────────────────── -->
-        <div id="vision-hud" class="vision-hud" aria-live="polite" aria-label="Live body language analysis">
-          <div class="vision-hud-header">
-            <div class="vision-hud-title">
-              <span id="vision-cam-dot" class="vision-cam-dot"></span>
-              <span>Body Language</span>
-            </div>
-            <span class="vision-hud-badge" id="vision-status-text">Connecting…</span>
-          </div>
-
-          <!-- Webcam mini-preview -->
-          <div class="vision-cam-wrap">
-            <video id="vision-cam-preview" class="vision-cam-preview"
-              autoplay muted playsinline
-              aria-label="Webcam preview"
-              title="Live webcam feed (processed locally)"
-            ></video>
-            <div class="vision-cam-overlay">AI Vision Active</div>
-          </div>
-
-          <!-- Expression pill -->
-          <div class="vision-pill" id="vision-expr-pill">
-            <div class="vision-pill-row">
-              <span class="vision-pill-emoji" id="vision-expr-emoji">😐</span>
-              <div class="vision-pill-info">
-                <span class="vision-pill-cat">Expression</span>
-                <span class="vision-pill-label" id="vision-expr-label">Analyzing…</span>
-              </div>
-              <span class="vision-pill-conf" id="vision-expr-conf">—</span>
-            </div>
-            <div class="vision-bar-track">
-              <div class="vision-bar-fill" id="vision-expr-bar"></div>
-            </div>
-          </div>
-
-          <!-- Pose pill -->
-          <div class="vision-pill" id="vision-pose-pill">
-            <div class="vision-pill-row">
-              <span class="vision-pill-emoji" id="vision-pose-emoji">🧍</span>
-              <div class="vision-pill-info">
-                <span class="vision-pill-cat">Posture</span>
-                <span class="vision-pill-label" id="vision-pose-label">Analyzing…</span>
-              </div>
-              <span class="vision-pill-conf" id="vision-pose-conf">—</span>
-            </div>
-            <div class="vision-bar-track">
-              <div class="vision-bar-fill" id="vision-pose-bar"></div>
-            </div>
-          </div>
-
-          <!-- Raw blendshape score breakdown (new — shows all 8 expression weights) -->
-          <div class="vision-scores-section">
-            <div class="vision-scores-header">
-              <span>Blendshape Scores</span>
-              <span id="vision-quality-badge" class="vision-quality-badge">Waiting…</span>
-            </div>
-            <div id="vision-scores-chart" class="vision-scores-chart" aria-label="Expression score breakdown"></div>
-          </div>
-
-          <p class="vision-hud-note">📡 52 ARKit blendshapes → EMA-smoothed. AI uses body language as a <strong>secondary</strong> signal. Audio is primary.</p>
-        </div>
       </div>
+
+      <!-- Vision HUD -->
+      <div class="glass rounded-2xl p-4 flex-1" id="vision-hud" aria-live="polite" aria-label="Live body language analysis">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span id="vision-cam-dot" class="vision-cam-dot w-2 h-2 rounded-full bg-white/20 transition-all"></span>
+            <span class="text-[10px] uppercase tracking-widest text-white/30 font-bold">Body Language</span>
+          </div>
+          <span id="vision-status-text"
+                class="text-[10px] px-2 py-0.5 rounded-full"
+                style="background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.3)">
+            Connecting…
+          </span>
+        </div>
+
+        <!-- Webcam preview -->
+        <div class="relative rounded-xl overflow-hidden mb-3" style="aspect-ratio:4/3; background:rgba(0,0,0,0.4)">
+          <video id="vision-cam-preview"
+                 class="w-full h-full object-cover"
+                 autoplay muted playsinline
+                 aria-label="Webcam preview"
+                 title="Live webcam feed (processed locally)"></video>
+          <div class="absolute bottom-0 left-0 right-0 text-center py-1 text-[9px] font-semibold tracking-widest"
+               style="background:rgba(124,90,240,0.4); color:rgba(255,255,255,0.7)">AI VISION ACTIVE</div>
+        </div>
+
+        <!-- Expression pill -->
+        <div class="glass rounded-xl p-2.5 mb-2" id="vision-expr-pill">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span id="vision-expr-emoji" class="text-xl">😐</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-[9px] uppercase tracking-wider text-white/30">Expression</div>
+              <div class="text-xs font-medium text-white/70 truncate" id="vision-expr-label">Analyzing…</div>
+            </div>
+            <span class="text-[10px] font-mono text-white/35" id="vision-expr-conf">—</span>
+          </div>
+          <div class="vision-bar-track">
+            <div class="vision-bar-fill" id="vision-expr-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Pose pill -->
+        <div class="glass rounded-xl p-2.5 mb-3" id="vision-pose-pill">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span id="vision-pose-emoji" class="text-xl">🧍</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-[9px] uppercase tracking-wider text-white/30">Posture</div>
+              <div class="text-xs font-medium text-white/70 truncate" id="vision-pose-label">Analyzing…</div>
+            </div>
+            <span class="text-[10px] font-mono text-white/35" id="vision-pose-conf">—</span>
+          </div>
+          <div class="vision-bar-track">
+            <div class="vision-bar-fill" id="vision-pose-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Blendshape scores -->
+        <div class="vision-scores-section">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[9px] uppercase tracking-wider text-white/25">Blendshape Scores</span>
+            <span id="vision-quality-badge"
+                  class="text-[9px] px-1.5 py-0.5 rounded-full"
+                  style="background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.25)">
+              Waiting…
+            </span>
+          </div>
+          <div id="vision-scores-chart" class="space-y-1" aria-label="Expression score breakdown"></div>
+        </div>
+
+        <p class="text-[9px] text-white/20 leading-relaxed mt-3">
+          📡 52 ARKit blendshapes → EMA-smoothed. AI uses body language as a
+          <strong class="text-white/35">secondary</strong> signal. Audio is primary.
+        </p>
+      </div>
+
     </aside>
 
   </main>
+</div><!-- /app shell -->
 
-  <!-- ── Controls Bar ────────────────────────────────────────────────────── -->
-  <div class="controls-bar" role="toolbar" aria-label="Pitch controls">
-    <div class="conn-status" id="conn-status-2" aria-live="polite">
-      <span class="conn-dot"></span>
-      <span id="conn-text-2">Press mic to start</span>
-    </div>
 
-    <button id="mic-btn" class="mic-btn" aria-label="Start recording microphone" aria-pressed="false">
-      <span class="mic-ripple" aria-hidden="true"></span>
-      <span class="mic-ripple" aria-hidden="true"></span>
-      <span id="mic-icon" aria-hidden="true">🎤</span>
-    </button>
-
-    <div class="controls-info">
-      <div class="controls-label" id="controls-label">Start Pitch</div>
-      <div class="controls-sublabel" id="controls-sublabel">Click mic &amp; speak clearly</div>
-    </div>
-
-    <!-- TTS Mute Toggle -->
-    <button id="mute-btn" class="mute-btn" aria-label="Mute voice" title="Mute / Unmute Marcus Reid's voice" onclick="toggleMute()">
-      <span id="mute-icon">🔊</span>
-    </button>
-  </div>
-
-</div><!-- /.app-wrapper -->
-
-<!-- ── "I'm Out" Overlay ─────────────────────────────────────────────────── -->
+<!-- ── "I'm Out" Overlay ──────────────────────────────────────────────────── -->
 <div id="out-overlay" role="dialog" aria-modal="true" aria-labelledby="out-title" aria-hidden="true">
-  <div class="out-card">
-    <div class="out-icon" aria-hidden="true">🚫</div>
-    <h2 class="out-title" id="out-title">I'm Out.</h2>
-    <p class="out-reason" id="out-reason">The pitch session has ended.</p>
-    <button class="out-close-btn" id="out-close-btn" onclick="dismissOut()">Start New Session</button>
+  <div class="glass rounded-3xl p-10 max-w-sm w-full text-center mx-4"
+       style="border:1px solid rgba(248,113,113,0.2); box-shadow: 0 0 60px rgba(248,113,113,0.1)">
+    <div class="text-6xl mb-5">🚫</div>
+    <h2 class="text-2xl font-bold text-red-400 mb-3" id="out-title">I'm Out.</h2>
+    <p class="text-sm text-white/50 leading-relaxed mb-6" id="out-reason">The pitch session has ended.</p>
+    <button class="w-full py-3 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95"
+            style="background: linear-gradient(135deg,#d4a844,#b8892e); color:#000"
+            id="out-close-btn" onclick="dismissOut()">
+      Start New Session
+    </button>
   </div>
 </div>
+
 
 <!-- Scripts -->
 <script src="/static/js/pcm-processor.js" defer></script>
 <script src="/static/js/vision_client.js" defer></script>
 <script src="/static/js/vc_client.js" defer></script>
 <script>
-  // Hook into vc_client.js session_id once it's available.
-  // vc_client.js must expose window.__vcSessionId after WebSocket connects.
-  // We poll briefly then start the vision pipeline with the same session_id.
+  // ── Patch vc_client.js UI hooks for Tailwind layout ──────────────────────
+
+  // Override conn-status update to drive both conn dots
+  const _origUpdateConn = window.__patchConnStatus;
+  function syncConnStatus(connected, text) {
+    const dot1 = document.getElementById('conn-dot');
+    const dot2 = document.getElementById('conn-dot-2');
+    [dot1, dot2].forEach(d => {
+      if (!d) return;
+      d.className = 'conn-dot ' + (connected ? 'connected' : 'disconnected');
+    });
+    const t1 = document.getElementById('conn-text');
+    const t2 = document.getElementById('conn-text-2');
+    if (t1) t1.textContent = text;
+    if (t2) t2.textContent = text;
+  }
+
+  // Vision client startup (poll for session_id from vc_client.js)
   (function() {
     let _attempts = 0;
     const _poll = setInterval(function() {
