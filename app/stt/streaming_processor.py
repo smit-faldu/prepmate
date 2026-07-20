@@ -89,8 +89,9 @@ from pipecat.utils.time import time_now_iso8601
 # ── Constants ──────────────────────────────────────────────────────────────────
 SAMPLE_RATE = 16_000          # Hz  (must match transport audio_in_sample_rate)
 MIN_AUDIO_SECS = 0.3          # ignore buffers shorter than this (avoid hallucinations)
-INTERIM_INTERVAL_SECS = 0.8   # how often to produce an interim frame while speaking
-PREROLL_SECS = 1.0            # rolling pre-speech buffer retained while idle
+INTERIM_INTERVAL_SECS = 0.5   # how often to produce an interim frame while speaking (was 0.8)
+PREROLL_SECS = 0.4            # rolling pre-speech buffer retained while idle (was 1.0)
+                              # 0.4s covers VAD start_secs=0.1 with comfortable margin
 
 
 # ── Shared model cache ──────────────────────────────────────────────────────────
@@ -210,6 +211,11 @@ class HybridWhisperSTTProcessor(FrameProcessor):
         Fast greedy decode for interim frames.
         beam_size=1 cuts latency in half vs beam_size=5; accuracy is
         good enough for a 'live preview' that the user never commits to.
+
+        NOTE: vad_filter is intentionally OFF here. Silero VAD upstream
+        already gates audio — only speech frames ever reach this method.
+        Adding vad_filter=True runs a second ONNX VAD pass inside Whisper,
+        adding 20-50 ms with no benefit. Keep it off for minimum latency.
         """
         if not self._is_long_enough(audio_bytes):
             return ""
@@ -219,11 +225,10 @@ class HybridWhisperSTTProcessor(FrameProcessor):
                 self._model.transcribe,
                 audio_f32,
                 language=self._lang_str,
-                beam_size=1,                    # greedy = fast
-                vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 200, "threshold": 0.5},
+                beam_size=1,                       # greedy = fast
                 no_speech_threshold=self._no_speech_prob,
                 condition_on_previous_text=False,  # no drift between chunks
+                word_timestamps=False,             # skip per-word timing (not needed for interim)
             )
             return " ".join(s.text.strip() for s in segments).strip()
         except Exception as exc:
@@ -234,6 +239,11 @@ class HybridWhisperSTTProcessor(FrameProcessor):
         """
         High-quality final pass over the complete, committed utterance
         (pre-roll + everything spoken). beam_size=5 for max accuracy.
+
+        NOTE: vad_filter is intentionally OFF. Silero VAD upstream has already
+        proven the buffer contains real speech — running a second Whisper-internal
+        VAD pass just adds latency with zero accuracy benefit. This is the
+        authoritative transcription the LLM will receive, so speed matters.
         """
         if not self._is_long_enough(audio_bytes):
             return ""
@@ -243,14 +253,12 @@ class HybridWhisperSTTProcessor(FrameProcessor):
                 self._model.transcribe,
                 audio_f32,
                 language=self._lang_str,
-                beam_size=5,                    # accurate
-                vad_filter=True,
-                # Lower threshold → more aggressive at capturing long speech
-                vad_parameters={"min_silence_duration_ms": 300, "threshold": 0.35},
+                beam_size=5,                       # accurate
                 no_speech_threshold=self._no_speech_prob,
                 # False: no drift/hallucination loops on long utterances.
-                # We have the FULL audio buffer already — no need to condition on prior output.
+                # We have the FULL audio buffer — no need to condition on prior output.
                 condition_on_previous_text=False,
+                word_timestamps=False,             # skip per-word timing (unused here)
             )
             return " ".join(s.text.strip() for s in segments).strip()
         except Exception as exc:

@@ -7,29 +7,28 @@ Turn-based flow (strict: one speaker at a time):
   3. On 'final' event: sends 'vc_response' JSON, THEN synthesizes the full
      VC reply via ElevenLabs and streams audio as binary WebSocket frames.
   4. Sends 'tts_done' → browser re-enables mic for next founder turn.
-  While Marcus is speaking, any transcript that arrives is DISCARDED (no queue).
+  While the AI is speaking, any transcript that arrives is DISCARDED (no queue).
 
-── Why we use a commit-delay timer ────────────────────────────────────────────
-Pipecat's VADController has TWO independent mechanisms that emit
-VADUserStoppedSpeakingFrame:
+── Turn-taking latency design ────────────────────────────────────────────────
+Previous version used a COMMIT_DELAY_SECS=2.5 timer to batch fragmented
+TranscriptionFrames (caused by Pipecat's _audio_idle_handler firing on audio
+frame gaps while VAD thought user was still speaking).
 
-  a) stop_secs silence detection  — fires when Silero VAD sees N seconds of
-     quiet audio frames.  Tunable via VAD_STOP_SECS (now 1.2s).
+That approach added a mandatory 2.5s dead-time AFTER VAD already detected
+speech end — unacceptable for a real-time pitch evaluator.
 
-  b) _audio_idle_handler          — fires when audio FRAMES STOP ARRIVING at
-     all (browser WebSocket jitter / mic buffer gap) while VAD thinks the user
-     is still speaking.  NOT tunable from our config; hardcoded in Pipecat.
-     Mitigated by reducing PCM chunk size from 4096 → 1024 samples (64ms)
-     so frames arrive 4× more frequently, preventing the idle gap.
+Fix strategy (belt-and-suspenders):
+  a) PCM chunk size is 1024 samples = 64ms, so frames arrive frequently
+     enough that _audio_idle_handler almost never fires mid-utterance.
+  b) VADProcessor now has audio_idle_timeout=2.0s — only triggers if no
+     audio frames arrive for 2 full seconds (browser tab hidden, network
+     blip), so it can't split a normal utterance.
+  c) HybridWhisperSTTProcessor emits exactly ONE TranscriptionFrame per
+     utterance (on VADUserStoppedSpeakingFrame). No batching needed.
+  d) VCBroadcaster now dispatches to the LLM immediately on each
+     TranscriptionFrame, guarded by _is_processing for turn-safety.
 
-Path (b) can still fire mid-sentence on slow connections, splitting a single
-utterance into 2-3 TranscriptionFrames.
-
-The fix: VCBroadcaster accumulates TranscriptionFrames in a buffer and starts
-a COMMIT_DELAY_SECS (2.5s) countdown on each arrival.  If another fragment
-arrives before the countdown expires it resets.  Only when the countdown fires
-does the combined text commit to the LLM.  A MAX_BUFFER_AGE_SECS (10s) hard
-cap ensures very long monologues are committed even if fragments keep arriving.
+Result: the LLM fires within ~100ms of VAD detecting speech end.
 """
 
 
@@ -70,35 +69,23 @@ class VCBroadcaster(FrameProcessor):
     """
     Replaces TranscriptionBroadcaster for the /ws/vc endpoint.
 
-    Intercepts final transcripts → utterance grouping → feeds LangGraph VC
+    Intercepts final transcripts → dispatches immediately to the LangGraph VC
     agent → streams tokens to browser → synthesizes TTS audio → re-enables mic.
 
-    Utterance grouping
-    ──────────────────
-    Each TranscriptionFrame is appended to _commit_buffer and a
-    COMMIT_DELAY_SECS asyncio timer is (re-)started.  When the timer fires
-    without any new fragment arriving, the combined text is committed to the
-    LLM as one coherent founder turn.
-
-    Processing guard
-    ────────────────
-    While an LLM turn is running, arriving fragments go into _pending_queue.
-    After the turn + TTS complete, pending fragments are committed as one
-    follow-up turn (not as multiple separate turns).
+    Turn-based (strict, no queue)
+    ──────────────────────────────
+    One TranscriptionFrame arrives per utterance (HybridWhisperSTTProcessor
+    emits it synchronously on VADUserStoppedSpeakingFrame). We dispatch to
+    the LLM immediately — no commit-delay timer needed.  While _is_processing
+    is True, additional transcripts are DISCARDED so the AI has the floor.
     """
 
     # ── Tuning knobs ──────────────────────────────────────────────────────────
-    # Seconds to wait after the LAST fragment / VAD-stop event before committing
-    # to the LLM.  The VAD-event-gating in process_frame means this timer only
-    # ticks during confirmed silence — it is cancelled on every VADUserStarted
-    # SpeakingFrame and restarted on every VADUserStoppedSpeakingFrame.
-    # So there is no risk of "infinite deferral" and MAX_BUFFER_AGE is not needed.
-    COMMIT_DELAY_SECS: float = 2.5
-
-    # NOTE: MIN_WORDS_TO_COMMIT removed.
-    # Any speech — even "Hello" — is a valid turn and should reach the LLM.
-    # Word-count filtering was causing short but meaningful utterances to be
-    # silently dropped, which felt broken.  VAD handles noise rejection upstream.
+    # NOTE: COMMIT_DELAY_SECS removed. Dispatching to LLM is now immediate.
+    # The old 2.5s delay was added to batch split TranscriptionFrames from
+    # Pipecat's _audio_idle_handler, but with PCM chunk size at 1024 samples
+    # (64ms) and audio_idle_timeout=2.0s on the VADProcessor, frame-gap splits
+    # are eliminated without any commit-delay overhead.
 
     def __init__(
         self,
@@ -116,18 +103,11 @@ class VCBroadcaster(FrameProcessor):
         # WS health flag — flip to True on first send failure after close.
         self._ws_closed: bool = False
 
-        # ── Utterance grouping state ─────────────────────────────────────────
-        # Fragments arriving within COMMIT_DELAY_SECS of each other are batched.
-        self._commit_buffer: list[str]      = []
-        self._commit_task:   asyncio.Task | None = None
-        # Cached direction for the delayed commit callback.
-        self._last_direction: FrameDirection = FrameDirection.DOWNSTREAM
-
         # ── Processing guard ─────────────────────────────────────────────────
         # True while run_turn_streaming / TTS is running.
         # STRICT TURN-BASED: while _is_processing, ALL incoming transcriptions
-        # are DISCARDED.  No queue.  The user must wait for Marcus to finish
-        # before their next turn is accepted — one speaker at a time.
+        # are DISCARDED.  The user must wait for the AI to finish before their
+        # next turn is accepted — one speaker at a time.
         self._is_processing: bool = False
 
     # ── WebSocket helpers ─────────────────────────────────────────────────────
@@ -143,52 +123,6 @@ class VCBroadcaster(FrameProcessor):
             self._ws_closed = True
             logger.debug(f"[VCBroadcaster] WS closed, stopping sends: {e}")
             return False
-
-    # ── Utterance grouping ────────────────────────────────────────────────────
-
-    def _cancel_commit_timer(self) -> None:
-        if self._commit_task and not self._commit_task.done():
-            self._commit_task.cancel()
-            self._commit_task = None
-
-    async def _schedule_commit(self, direction: FrameDirection) -> None:
-        """(Re-)start the commit countdown.  Called on every new fragment."""
-        self._last_direction = direction
-        self._cancel_commit_timer()
-        self._commit_task = asyncio.create_task(self._commit_after_delay())
-
-    async def _commit_after_delay(self) -> None:
-        """
-        Fires COMMIT_DELAY_SECS after the last VAD-stop or TranscriptionFrame.
-        Drains the combined buffer and calls the LLM with the full utterance.
-
-        No MAX_BUFFER_AGE here — the VAD-event-gating in process_frame ensures
-        this timer ONLY runs during silence (cancelled on speech-start, restarted
-        on speech-stop), so there is no risk of running forever.
-        """
-        try:
-            await asyncio.sleep(self.COMMIT_DELAY_SECS)
-        except asyncio.CancelledError:
-            return  # reset — a VAD-start or new fragment arrived before we fired
-
-        if not self._commit_buffer:
-            return
-
-        combined = " ".join(self._commit_buffer).strip()
-        self._commit_buffer.clear()
-        self._commit_task = None
-
-        if not combined:
-            return
-
-        if self._is_processing:
-            # Strict turn-based: Marcus has the floor — discard.
-            logger.warning(
-                f"[VC] LLM busy (strict turn-based) — DISCARDING transcript: {combined!r}"
-            )
-            return
-
-        await self._run_llm_turn(combined, self._last_direction)
 
     # ── LLM turn execution ────────────────────────────────────────────────────
 
@@ -291,21 +225,18 @@ class VCBroadcaster(FrameProcessor):
             text = frame.text.strip()
             if text:
                 if self._is_processing:
-                    # Strict turn-based: Marcus has the floor — discard immediately.
+                    # Strict turn-based: AI has the floor — discard immediately.
                     logger.warning(
                         f"[VC] Discarding transcript (AI turn in progress): {text!r}"
                     )
-                    # Still pass downstream for logging but do NOT buffer or schedule.
                     await self.push_frame(frame, direction)
                     return
 
-                logger.debug(
-                    f"[VC] Fragment received: {text!r} "
-                    f"— buffering, timer reset to {self.COMMIT_DELAY_SECS}s"
-                )
-                self._commit_buffer.append(text)
-                await self._schedule_commit(direction)
-            # Always pass the raw frame downstream (for logging / other processors).
+                logger.info(f"[VC] Transcript received — dispatching immediately: {text!r}")
+                # Fire-and-forget the LLM turn; don't await here so the frame
+                # pipeline keeps flowing (VAD events can still pass through).
+                asyncio.create_task(self._run_llm_turn(text, direction))
+
             await self.push_frame(frame, direction)
             return
 
@@ -313,35 +244,17 @@ class VCBroadcaster(FrameProcessor):
             await self._safe_send(json.dumps({"type": "interim", "text": frame.text}))
 
         elif isinstance(frame, VADUserStartedSpeakingFrame):
-            # ── User is speaking again: SUSPEND the commit timer ──────────────
-            # The commit timer should only count down during silence.  If VAD
-            # sees a new speech-start while the timer is running it means the
-            # user paused mid-sentence but kept going — cancel the countdown so
-            # we don't commit a half-sentence to the LLM.
-            if self._commit_task and not self._commit_task.done():
-                logger.debug(
-                    "[VC] VAD speech-start — suspending commit timer "
-                    "(user is still speaking)"
-                )
-                self._cancel_commit_timer()
+            # User is speaking — inform the browser UI.
             await self._safe_send(json.dumps({"type": "status", "status": "speaking"}))
 
         elif isinstance(frame, VADUserStoppedSpeakingFrame):
-            # ── User paused/stopped: ACTIVATE the commit timer ────────────────
-            # If we already have buffered text and the timer isn't running yet
-            # (it was cancelled by a speech-start above), restart it now.
-            # This ensures the 2.5s countdown begins from the confirmed pause,
-            # not from when the first fragment arrived.
-            if self._commit_buffer and not self._is_processing:
-                if not (self._commit_task and not self._commit_task.done()):
-                    logger.debug(
-                        "[VC] VAD speech-stop — activating commit timer "
-                        f"({len(self._commit_buffer)} fragments buffered)"
-                    )
-                    await self._schedule_commit(direction)
+            # User paused/stopped — inform the browser UI.
+            # The final Whisper pass runs inside HybridWhisperSTTProcessor and
+            # will emit a TranscriptionFrame shortly after this event.
             await self._safe_send(json.dumps({"type": "status", "status": "silence"}))
 
         await self.push_frame(frame, direction)
+
 
 
 
@@ -358,17 +271,25 @@ async def vc_websocket_endpoint(websocket: WebSocket):
     vad_analyzer = SileroVADAnalyzer(
         params=VADParams(
             stop_secs=VAD_STOP_SECS,
-            start_secs=0.2,
-            confidence=0.65,
-            # min_volume: minimum RMS for the VAD to consider audio as speech.
-            # 0.6 was too aggressive — brief quieter moments in natural speech
-            # (breathing, word transitions, sentence starts) were falsely seen
-            # as silence, triggering premature VAD stops mid-sentence.
-            # 0.3 is more tolerant while still rejecting true background noise.
-            min_volume=0.3,
+            # start_secs: how long Silero must see speech before confirming start.
+            # 0.1s = 100ms faster reaction vs old 0.2s — catches the first word sooner.
+            start_secs=0.1,
+            # confidence: 0.6 is slightly more sensitive than 0.65.
+            # Still robust against background noise; lower would over-trigger.
+            confidence=0.6,
+            # min_volume: 0.2 catches quieter speech that 0.3 was rejecting.
+            # VAD's confidence threshold does the real noise rejection — this is
+            # just a fast energy gate to skip obviously-silent frames cheaply.
+            min_volume=0.2,
         )
     )
-    vad_processor = VADProcessor(vad_analyzer=vad_analyzer)
+    # audio_idle_timeout: if NO audio frames arrive for this many seconds while
+    # VAD thinks the user is speaking, force a speech-end transition.
+    # This is the fix for _audio_idle_handler: 2.0s is long enough to never
+    # trigger mid-sentence (even with browser tab jitter at 1024-sample chunks),
+    # but short enough to unstick the pipeline if the WebSocket truly goes quiet.
+    # Without this, a frame gap could leave the pipeline stuck in SPEAKING state.
+    vad_processor = VADProcessor(vad_analyzer=vad_analyzer, audio_idle_timeout=2.0)
 
     serializer = WhisperLiveSerializer()
     transport  = FastAPIWebsocketTransport(

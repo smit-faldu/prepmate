@@ -425,14 +425,29 @@ function handleVADStatus(status) {
     vcThinking.classList.remove('active');
     interimContent.innerHTML = '<em style="opacity:0.6">Whisper is listening…</em>';
     interimContent.classList.add('active');
+    // Record when speech started for latency measurement
+    window._vadSpeechStartTs = performance.now();
   } else if (status === 'silence') {
-    updateStatus('connected', 'Finalizing...');
+    // VAD detected end-of-speech — Whisper final pass is running now.
+    // The LLM turn will fire as soon as the TranscriptionFrame arrives (~200-600ms).
+    updateStatus('connected', 'Processing transcript…');
     interimContent.innerHTML = '<em style="opacity:0.6">Finalizing transcript…</em>';
     interimContent.classList.remove('active');
+    window._vadStopTs = performance.now();
+    if (window._vadSpeechStartTs) {
+      console.debug(`[VAD] Speech duration: ${((window._vadStopTs - window._vadSpeechStartTs) / 1000).toFixed(2)}s`);
+    }
   }
 }
 
 function handleThinking(founderText) {
+  // Measure and log STT→LLM latency in dev console
+  if (window._vadStopTs) {
+    const sttToLlmMs = Math.round(performance.now() - window._vadStopTs);
+    console.debug(`[Latency] VAD-stop → LLM dispatch: ${sttToLlmMs}ms (target: <300ms)`);
+    window._vadStopTs = null;
+  }
+
   // Add founder bubble
   if (founderText) {
     appendFounderMessage(founderText);
@@ -440,13 +455,13 @@ function handleThinking(founderText) {
     interimContent.classList.remove('active');
   }
   vcThinking.classList.add('active');
-  updateStatus('thinking', 'Marcus is thinking...');
+  updateStatus('thinking', 'Elena is thinking...');
   setVCMood('thinking');
-  // Gate the mic — Marcus has the floor now (turn-based)
+  // Gate the mic — Elena has the floor now (turn-based)
   micGated   = true;
   ttsPlaying = true;
-  controlsLabel.textContent    = 'Marcus is speaking...';
-  controlsSubLabel.textContent = 'Wait for Marcus to finish';
+  controlsLabel.textContent    = 'Elena is speaking...';
+  controlsSubLabel.textContent = 'Wait for Elena to finish';
   // Reset streaming bubble ref — a fresh one is created on the first token
   _streamingVCBubble = null;
   _streamingVCText = '';
