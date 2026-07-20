@@ -6,9 +6,12 @@
 class PCMProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
-        // Accumulate samples until we have a full 4096-sample chunk (~256ms @16kHz)
+        // 1024 samples @ 16kHz = ~64ms per chunk.
+        // Previous value of 4096 (~256ms) caused Pipecat's _audio_idle_handler
+        // to see 256ms+ gaps between frames and falsely declare speech ended
+        // mid-sentence, splitting one utterance into multiple TranscriptionFrames.
         this._buffer = [];
-        this._chunkSize = 4096;
+        this._chunkSize = 1024;
     }
 
     process(inputs, outputs, parameters) {

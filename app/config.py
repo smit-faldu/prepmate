@@ -66,7 +66,10 @@ def resolve_whisper_config() -> dict:
 
 
 # ── VAD ───────────────────────────────────────────────────────────────────────
-VAD_STOP_SECS: float = float(os.getenv("VAD_STOP_SECS", "1.0"))
+# VAD_STOP_SECS: how long Silero VAD must see silence before declaring speech ended.
+# Triggers the Whisper final pass. 1.5s tolerates natural breathing pauses mid-sentence.
+# The COMMIT_DELAY_SECS in VCBroadcaster handles batching split fragments — keep these independent.
+VAD_STOP_SECS: float = float(os.getenv("VAD_STOP_SECS", "1.5"))
 
 
 # ── VC / LLM ─────────────────────────────────────────────────────────────────

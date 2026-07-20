@@ -245,9 +245,12 @@ class HybridWhisperSTTProcessor(FrameProcessor):
                 language=self._lang_str,
                 beam_size=5,                    # accurate
                 vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 300, "threshold": 0.45},
+                # Lower threshold → more aggressive at capturing long speech
+                vad_parameters={"min_silence_duration_ms": 300, "threshold": 0.35},
                 no_speech_threshold=self._no_speech_prob,
-                condition_on_previous_text=True,
+                # False: no drift/hallucination loops on long utterances.
+                # We have the FULL audio buffer already — no need to condition on prior output.
+                condition_on_previous_text=False,
             )
             return " ".join(s.text.strip() for s in segments).strip()
         except Exception as exc:
@@ -324,7 +327,13 @@ class HybridWhisperSTTProcessor(FrameProcessor):
                 self._interim_task = None
 
             final_audio        = bytes(self._audio_buffer)
-            self._audio_buffer.clear()
+            # ── Clear AFTER snapshotting, NOT before ──────────────────────
+            # Audio frames that arrive during _transcribe_final() (a blocking
+            # thread call) will land in a fresh buffer. We also seed the new
+            # buffer with the trailing `preroll_bytes` of the just-finished
+            # utterance so the very first word of the next sentence is never
+            # lost if the founder starts speaking again immediately.
+            self._audio_buffer = bytearray(final_audio[-self._preroll_bytes:])
             self._last_interim = ""
 
             if final_audio and self._is_long_enough(final_audio):
