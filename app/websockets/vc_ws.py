@@ -33,8 +33,7 @@ from pipecat.workers.runner import WorkerRunner
 
 from app.config import VAD_STOP_SECS, resolve_whisper_config
 from app.stt.serializer import WhisperLiveSerializer
-from app.stt.streaming_processor import StreamingWhisperProcessor
-from app.stt.whisper_model import get_whisper_model
+from app.stt.streaming_processor import create_whisper_stt_service
 from app.tts.engine import TTSEngine
 from app.vc import new_session, run_turn_streaming
 from app.vision.context import build_vision_context_block
@@ -194,7 +193,6 @@ async def vc_websocket_endpoint(websocket: WebSocket):
 
     tts_engine    = TTSEngine()
     wcfg          = resolve_whisper_config()
-    whisper_model = await get_whisper_model(wcfg)
 
     vad_analyzer = SileroVADAnalyzer(
         params=VADParams(stop_secs=VAD_STOP_SECS, start_secs=0.2, confidence=0.7, min_volume=0.6)
@@ -212,7 +210,13 @@ async def vc_websocket_endpoint(websocket: WebSocket):
         ),
     )
 
-    streaming_stt  = StreamingWhisperProcessor(whisper_model=whisper_model, language=wcfg["language"])
+    streaming_stt = create_whisper_stt_service(
+        model=wcfg["model"],
+        language=wcfg.get("language", "en"),
+        device=wcfg["device"],
+        compute_type=wcfg["compute_type"],
+        no_speech_prob=wcfg.get("no_speech_prob", 0.4),
+    )
     vc_broadcaster = VCBroadcaster(websocket, session_id, tts_engine)
 
     pipeline = Pipeline([transport.input(), vad_processor, streaming_stt, vc_broadcaster, transport.output()])

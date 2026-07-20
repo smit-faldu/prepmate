@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.config import resolve_whisper_config  # noqa: F401
-from app.stt.streaming_processor import StreamingWhisperProcessor
+from app.stt.streaming_processor import INTERIM_INTERVAL_SECS
 from app.vc import new_session
 from app.websockets.stt_ws import stt_websocket_endpoint
 from app.websockets.vc_ws import vc_websocket_endpoint
@@ -70,7 +70,7 @@ async def stt_info():
         "compute_type":         wcfg["compute_type"],
         "language":             wcfg["language"] or "auto",
         "streaming":            True,
-        "chunk_interval_secs":  StreamingWhisperProcessor.CHUNK_INTERVAL_SECS,
+        "chunk_interval_secs":  INTERIM_INTERVAL_SECS,
     })
 
 

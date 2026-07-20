@@ -1,33 +1,15 @@
 """
-app/stt/whisper_model.py — Singleton faster-whisper model loader.
+app/stt/whisper_model.py — DEPRECATED singleton model loader.
 
-The model is loaded once at first connection and shared across all subsequent
-WebSocket connections, avoiding repeated disk reads.
+This module is no longer used.
+
+Previously it held a global faster-whisper WhisperModel singleton that was
+passed explicitly to the custom StreamingWhisperProcessor.
+
+After the rewrite to Pipecat's native WhisperSTTService, model loading is
+managed internally by the service — no explicit model object needs to be
+created or passed around.  The service lazily loads the model on its first
+inference call and caches it for the lifetime of the service instance.
+
+This file is kept for reference only and may be deleted.
 """
-
-import asyncio
-
-from loguru import logger
-
-
-_WHISPER_MODEL = None
-_WHISPER_MODEL_LOCK = asyncio.Lock()
-
-
-async def get_whisper_model(wcfg: dict):
-    """Lazily load faster-whisper WhisperModel as a singleton."""
-    global _WHISPER_MODEL
-    async with _WHISPER_MODEL_LOCK:
-        if _WHISPER_MODEL is None:
-            from faster_whisper import WhisperModel
-            logger.info(
-                f"[Whisper] Loading model '{wcfg['model']}' "
-                f"device={wcfg['device']} compute_type={wcfg['compute_type']} ..."
-            )
-            _WHISPER_MODEL = WhisperModel(
-                wcfg["model"],
-                device=wcfg["device"],
-                compute_type=wcfg["compute_type"],
-            )
-            logger.info("[Whisper] Model ready.")
-    return _WHISPER_MODEL
