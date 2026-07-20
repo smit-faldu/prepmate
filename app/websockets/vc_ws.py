@@ -210,7 +210,7 @@ async def vc_websocket_endpoint(websocket: WebSocket):
         ),
     )
 
-    streaming_stt = create_whisper_stt_service(
+    streaming_stt = await create_whisper_stt_service(
         model=wcfg["model"],
         language=wcfg.get("language", "en"),
         device=wcfg["device"],

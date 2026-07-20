@@ -192,7 +192,7 @@ async def stt_websocket_endpoint(websocket: WebSocket) -> None:
     # them to delineate speech segments.  Emits:
     #   • InterimTranscriptionFrame — while user is still speaking
     #   • TranscriptionFrame        — final result after utterance ends
-    whisper_stt = create_whisper_stt_service(
+    whisper_stt = await create_whisper_stt_service(
         model=wcfg["model"],
         language=wcfg.get("language", "en"),
         device=wcfg["device"],

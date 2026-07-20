@@ -27,6 +27,26 @@ app = FastAPI(title="PrepMate — STT + VC Pitch Evaluator")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+# ── Startup: warm the shared Whisper model ───────────────────────────────────
+@app.on_event("startup")
+async def _preload_stt_model() -> None:
+    """
+    Load the Whisper model once, before the first request arrives.
+
+    Without this, the model loads lazily on the first websocket connection
+    (whichever of /ws or /ws/vc gets hit first) and that user eats the full
+    load time — several seconds, or minutes on a first-ever download. Every
+    connection after that reuses the same cached model (see
+    app/stt/streaming_processor.py: get_shared_whisper_model).
+    """
+    from app.stt.streaming_processor import preload_whisper_model
+
+    wcfg = resolve_whisper_config()
+    logger.info("[Startup] Pre-loading shared Whisper model …")
+    await preload_whisper_model(wcfg["model"], wcfg["device"], wcfg["compute_type"])
+    logger.info("[Startup] Whisper model ready.")
+
+
 # ── Utility routes ────────────────────────────────────────────────────────────
 
 @app.get("/favicon.ico")
